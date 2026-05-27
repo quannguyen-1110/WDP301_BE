@@ -1,0 +1,31 @@
+{
+  "name": "wdp301_be",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quannguyen-1110/WDP301_BE.git"
+  },
+  "bugs": {
+    "url": "https://github.com/quannguyen-1110/WDP301_BE/issues"
+  },
+  "homepage": "https://github.com/quannguyen-1110/WDP301_BE#readme",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mongoose": "^9.6.2",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
