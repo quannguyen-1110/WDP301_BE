@@ -1,10 +1,10 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
 
 const seriesRankSchema = new mongoose.Schema(
   {
     seriesId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Series",
+      ref: 'Series',
       required: true,
     },
     rank: {
@@ -21,4 +21,4 @@ const seriesRankSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-export default mongoose.model("SeriesRank", seriesRankSchema);
+module.exports = mongoose.model('SeriesRank', seriesRankSchema);

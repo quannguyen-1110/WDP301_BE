@@ -1,5 +1,5 @@
 {
-  "name": "be-mangaka",
+  "name": "wdp301_be",
   "version": "1.0.0",
   "description": "Manga Creation Workflow - Backend API",
   "main": "server.js",
@@ -16,23 +16,12 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
     "morgan": "^1.10.0",
+    "socket.io": "^4.8.3",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
-  }
-}
-{
-  "name": "wdp301_be",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
@@ -41,16 +30,5 @@
   "bugs": {
     "url": "https://github.com/quannguyen-1110/WDP301_BE/issues"
   },
-  "homepage": "https://github.com/quannguyen-1110/WDP301_BE#readme",
-  "dependencies": {
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "mongoose": "^9.6.2",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.14"
-  }
+  "homepage": "https://github.com/quannguyen-1110/WDP301_BE#readme"
 }

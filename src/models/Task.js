@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
 
 const taskSchema = new mongoose.Schema({
   seriesId: String,
@@ -7,9 +7,9 @@ const taskSchema = new mongoose.Schema({
   title: String,
   status: {
     type: String,
-    enum: ["PENDING", "DONE"],
-    default: "PENDING"
+    enum: ['PENDING', 'DONE'],
+    default: 'PENDING'
   }
 }, { timestamps: true });
 
-export default mongoose.model("Task", taskSchema);
+module.exports = mongoose.model('Task', taskSchema);

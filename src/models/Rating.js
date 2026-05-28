@@ -1,10 +1,10 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
 
 const ratingSchema = new mongoose.Schema(
   {
     seriesId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Series",
+      ref: 'Series',
       required: true,
     },
     voteCount: {
@@ -14,11 +14,11 @@ const ratingSchema = new mongoose.Schema(
     sourceFrom: String,
     submittedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
   },
   { timestamps: true }
 );
 
-export default mongoose.model("Rating", ratingSchema);
+module.exports = mongoose.model('Rating', ratingSchema);

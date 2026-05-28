@@ -1,27 +1,27 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
 
-import { VOTE_DECISION } from "../types/enum.type.js";
+const VOTE_DECISION = ['ACCEPT', 'REJECT'];
 
 const voteSchema = new mongoose.Schema(
   {
     submissionId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Submission",
+      ref: 'Submission',
       required: true,
     },
     voterId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
     decision: {
       type: String,
-      enum: Object.values(VOTE_DECISION),
-      default: VOTE_DECISION.ACCEPT,
+      enum: VOTE_DECISION,
+      default: VOTE_DECISION[0],
     },
     comment: String,
   },
   { timestamps: true },
 );
 
-export default mongoose.model("Vote", voteSchema);
+module.exports = mongoose.model('Vote', voteSchema);
