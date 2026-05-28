@@ -1,0 +1,9 @@
+export const CHAPTER_STATUS = {
+  IN_PROGRESS: "IN_PROGRESS",
+  COMPLETED: "COMPLETED"
+};
+
+export const VOTE_DECISION = {
+  ACCEPT: "ACCEPT",
+  REJECT: "REJECT"
+};

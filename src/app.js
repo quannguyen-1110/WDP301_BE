@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import taskRoutes from "./routes/task.routes.js";
 import chapterRoutes from "./routes/chapter.routes.js";
+import ratingRoutes from "./routes/rating.route.js";
+import rankRoutes from "./routes/rank.route.js";
 
 const app = express();
 
@@ -17,6 +19,8 @@ export const setupApp = (io) => {
 
   app.use("/tasks", taskRoutes);
   app.use("/chapters", chapterRoutes);
+  app.use("/ratings", ratingRoutes);
+  app.use("/ranks", rankRoutes);
 
   return app;
 };
