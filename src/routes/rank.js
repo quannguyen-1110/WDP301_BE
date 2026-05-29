@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { getSeriesRanks, submitRank } = require('../controllers/rankController.js');
+const { authorize } = require('../middleware/auth.js');
+const { getSeriesRanks, submitRank, updateRank, deleteRank } = require('../controllers/rankController.js');
 
 /**
  * @swagger
- * /ranks:
+ * /api/ranks:
  *   post:
- *     summary: Submit a rank entry for a series
+ *     summary: Submit a rank entry for a series (Board Member)
  *     tags: [Ranks]
  *     security:
  *       - BearerAuth: []
@@ -39,11 +40,11 @@ const { getSeriesRanks, submitRank } = require('../controllers/rankController.js
  *       500:
  *         description: Server error
  */
-router.post('/', submitRank);
+router.post('/', authorize('BOARD_MEMBER'), submitRank);
 
 /**
  * @swagger
- * /ranks/{seriesId}:
+ * /api/ranks/{seriesId}:
  *   get:
  *     summary: Get the latest rank for a series
  *     tags: [Ranks]
@@ -63,5 +64,51 @@ router.post('/', submitRank);
  *         description: Server error
  */
 router.get('/:seriesId', getSeriesRanks);
+
+/**
+ * @swagger
+ * /api/ranks/{id}:
+ *   put:
+ *     summary: Update a rank by ID (Board Member)
+ *     tags: [Ranks]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The series ID
+ *     responses:
+ *       200:
+ *         description: Latest rank returned
+ *       500:
+ *         description: Server error
+ */
+router.put('/:id', authorize('BOARD_MEMBER'), updateRank);
+
+/**
+ * @swagger
+ * /api/ranks/{id}:
+ *   delete:
+ *     summary: Delete a rank by ID (Board Member)
+ *     tags: [Ranks]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The rank ID
+ *     responses:
+ *       200:
+ *         description: Rank deleted
+ *       500:
+ *         description: Server error
+ */
+router.delete('/:id', authorize('BOARD_MEMBER'), deleteRank);
 
 module.exports = router;

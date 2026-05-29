@@ -8,7 +8,7 @@ const {
 
 /**
  * @swagger
- * /tasks:
+ * /api/tasks:
  *   post:
  *     summary: Create a new task assignment
  *     tags: [Tasks]
@@ -47,7 +47,7 @@ router.post('/', createTask);
 
 /**
  * @swagger
- * /tasks/{id}/submit:
+ * /api/tasks/{id}/submit:
  *   put:
  *     summary: Mark a task as done
  *     tags: [Tasks]

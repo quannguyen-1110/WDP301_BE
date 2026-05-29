@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
+const { authorize } = require('../middleware/auth.js');
 const { createChapter, updateChapter, deleteChapter, publishChapter } = require('../controllers/chapterController.js');
 
 /**
  * @swagger
- * /chapters:
+ * /api/chapters:
  *   post:
- *     summary: Create a new chapter
+ *     summary: Create a new chapter (Mangaka)
  *     tags: [Chapters]
  *     security:
  *       - BearerAuth: []
@@ -35,51 +36,13 @@ const { createChapter, updateChapter, deleteChapter, publishChapter } = require(
  *       500:
  *         description: Server error
  */
-router.post('/', createChapter);
+router.post('/', authorize('MANGAKA') ,createChapter);
 
 /**
  * @swagger
- * /chapters/{id}:
- *   put:
- *     summary: Update a chapter
- *     tags: [Chapters]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: The chapter ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               chapterNumber:
- *                 type: number
- *               status:
- *                 type: string
- *                 enum: [IN_PROGRESS, COMPLETED]
- *               dueAt:
- *                 type: string
- *                 format: date-time
- *     responses:
- *       200:
- *         description: Chapter updated successfully
- *       500:
- *         description: Server error
- */
-router.put('/:id', updateChapter);
-
-/**
- * @swagger
- * /chapters/{id}:
+ * /api/chapters/{id}:
  *   delete:
- *     summary: Delete a chapter
+ *     summary: Delete a chapter (Mangaka)
  *     tags: [Chapters]
  *     security:
  *       - BearerAuth: []
@@ -96,13 +59,13 @@ router.put('/:id', updateChapter);
  *       500:
  *         description: Server error
  */
-router.delete('/:id', deleteChapter);
+router.delete('/:id', authorize('MANGAKA'), deleteChapter);
 
 /**
  * @swagger
- * /chapters/{id}:
+ * /api/chapters/{id}:
  *   put:
- *     summary: Update a chapter
+ *     summary: Update a chapter (Mangaka or Editor)
  *     tags: [Chapters]
  *     security:
  *       - BearerAuth: []
@@ -134,13 +97,13 @@ router.delete('/:id', deleteChapter);
  *       500:
  *         description: Server error
  */
-router.put('/:id', updateChapter);
+router.put('/:id', authorize('MANGAKA', 'EDITOR'), updateChapter);
 
 /**
  * @swagger
- * /publish/{id}:
+ * /api/chapters/publish/{id}:
  *   post:
- *     summary: Publish a chapter
+ *     summary: Publish a chapter (Mangaka)
  *     tags: [Chapters]
  *     security:
  *       - BearerAuth: []
@@ -157,6 +120,6 @@ router.put('/:id', updateChapter);
  *       500:
  *         description: Server error
  */
-router.post('/publish/:id', publishChapter);
+router.post('/publish/:id', authorize('MANGAKA'), publishChapter);
 
 module.exports = router;

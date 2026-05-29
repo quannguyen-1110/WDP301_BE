@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { submitVote, getMyVotes } = require('../controllers/voteController.js');
+const { submitVote, getMyVotes, updateVote, deleteVote } = require('../controllers/voteController.js');
 
 /**
  * @swagger
- * /votes:
+ * /api/votes:
  *   post:
  *     summary: Submit a vote on a submission
- *     tags: [Votes]
+ *     tags: [Votes (BOARD_MEMBER)]
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -44,10 +44,10 @@ router.post('/', submitVote);
 
 /**
  * @swagger
- * /votes:
+ * /api/votes:
  *   get:
  *     summary: Get all votes by a user
- *     tags: [Votes]
+ *     tags: [Votes (BOARD_MEMBER)]
  *     security:
  *       - BearerAuth: []
  *     parameters:
@@ -63,6 +63,54 @@ router.post('/', submitVote);
  *       500:
  *         description: Server error
  */
-router.get('/', getMyVotes);
+router.get('/me', getMyVotes);
+
+/**
+ * @swagger
+ * /api/votes/{voteId}:
+ *   put:
+ *     summary: Update a vote
+ *     tags: [Votes (BOARD_MEMBER)]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: voteId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The vote ID to update
+ *     responses:
+ *       200:
+ *         description: Vote updated successfully
+ *       500:
+ *         description: Server error
+ */
+router.put('/:voteId', updateVote);
+
+/**
+ * @swagger
+ * /api/votes/{voteId}:
+ *   delete:
+ *     summary: Delete a vote
+ *     tags: [Votes (BOARD_MEMBER)]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: voteId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The vote ID to delete
+ *     responses:
+ *       200:
+ *         description: Vote deleted successfully
+ *       500:
+ *         description: Server error
+ */
+router.delete('/:voteId', deleteVote);
+
+
 
 module.exports = router;

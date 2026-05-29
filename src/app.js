@@ -10,6 +10,9 @@ const chapterRoutes = require('./routes/chapter.js');
 const ratingRoutes = require('./routes/rating.js');
 const rankRoutes = require('./routes/rank.js');
 const voteRoutes = require('./routes/vote.js');
+const submissionRoutes = require('./routes/submission.js');
+
+const { protect, authorize } = require('./middleware/auth.js');
 
 const app = express();
 
@@ -29,12 +32,13 @@ const setupApp = (io) => {
   });
 
   app.use('/api/auth', authRoutes);
-  app.use('/api/series', seriesRoutes);
-  app.use('/tasks', taskRoutes);
-  app.use('/chapters', chapterRoutes);
-  app.use('/ratings', ratingRoutes);
-  app.use('/ranks', rankRoutes);
-  app.use('/votes', voteRoutes);
+  app.use('/api/series', protect, seriesRoutes);
+  app.use('/api/tasks', protect, taskRoutes);
+  app.use('/api/chapters', protect, chapterRoutes);
+  app.use('/api/ratings', protect, ratingRoutes);
+  app.use('/api/ranks', protect, rankRoutes);
+  app.use('/api/votes', protect, authorize('BOARD_MEMBER'), voteRoutes);
+  app.use('/api/submissions', protect, submissionRoutes);
 
   // Health check
   app.get('/api/health', (req, res) => {

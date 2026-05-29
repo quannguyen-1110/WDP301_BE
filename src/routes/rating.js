@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { getSeriesRatings, submitRating } = require('../controllers/ratingController.js');
+const { getSeriesRatings, submitRating, updateRating, deleteRating } = require('../controllers/ratingController.js');
+const { authorize } = require('../middleware/auth.js');
 
 /**
  * @swagger
- * /ratings:
+ * /api/ratings:
  *   post:
  *     summary: Submit a rating for a series
  *     tags: [Ratings]
@@ -42,7 +43,53 @@ router.post('/', submitRating);
 
 /**
  * @swagger
- * /ratings/{seriesId}:
+ * /api/ratings/{ratingId}:
+ *   put:
+ *     summary: Update a rating (Editor)
+ *     tags: [Ratings]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: ratingId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The rating ID
+ *     responses:
+ *       200:
+ *         description: Rating updated successfully
+ *       500:
+ *         description: Server error
+ */
+router.put('/:ratingId', authorize('EDITOR'), updateRating);
+
+/**
+ * @swagger
+ * /api/ratings/{ratingId}:
+ *   delete:
+ *     summary: Delete a rating (Editor)
+ *     tags: [Ratings]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: ratingId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The rating ID
+ *     responses:
+ *       200:
+ *         description: Rating deleted successfully
+ *       500:
+ *         description: Server error
+ */
+router.delete('/:ratingId', authorize('EDITOR'), deleteRating);
+
+/**
+ * @swagger
+ * /api/ratings/{seriesId}:
  *   get:
  *     summary: Get all ratings for a series
  *     tags: [Ratings]

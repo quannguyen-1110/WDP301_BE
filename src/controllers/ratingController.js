@@ -86,6 +86,39 @@ exports.submitRating = async (req, res) => {
   }
 };
 
+exports.updateRating = async (req, res) => {
+  try {
+    const rating = await Rating.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    res.status(200).json({
+      success: true,
+      data: rating,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.deleteRating = async (req, res) => {
+  try {
+    const rating = await Rating.findByIdAndDelete(req.params.id);
+    res.status(200).json({
+      success: true,
+      data: rating,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 exports.getMyRatings = async (req, res) => {
   try {
     const ratings = await Rating.find({ submittedBy: req.query.userId });

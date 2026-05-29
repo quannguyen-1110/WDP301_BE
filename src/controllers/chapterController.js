@@ -20,8 +20,8 @@ exports.createChapter = async (req, res) => {
   }
 };
 
-exports.getChapter = async (chapterId) => {
-  const chapter = await Chapter.findById(chapterId);
+exports.getChapterBySeriesId = async (seriesId) => {
+  const chapter = await Chapter.find({ series: seriesId });
   return chapter;
 };
 

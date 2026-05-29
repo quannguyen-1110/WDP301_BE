@@ -16,6 +16,39 @@ exports.submitVote = async (req, res) => {
   }
 };
 
+exports.updateVote = async (req, res) => {
+  try {
+    const votes = await Vote.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    res.status(200).json({
+      success: true,
+      data: votes,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.deleteVote = async (req, res) => {
+  try {
+    const votes = await Vote.findByIdAndDelete(req.params.id);
+    res.status(200).json({
+      success: true,
+      data: votes,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 exports.getMyVotes = async (req, res) => {
   try {
     const votes = await Vote.find({ userId: req.query.userId });
