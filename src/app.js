@@ -12,6 +12,9 @@ const rankRoutes = require('./routes/rank.js');
 const voteRoutes = require('./routes/vote.js');
 const submissionRoutes = require('./routes/submission.js');
 
+// FILE ROUTES
+const fileRoutes = require('./routes/file.js');
+
 const { protect, authorize } = require('./middleware/auth.js');
 
 const app = express();
@@ -31,6 +34,7 @@ const setupApp = (io) => {
     next();
   });
 
+  // ===== ROUTES =====
   app.use('/api/auth', authRoutes);
   app.use('/api/series', protect, seriesRoutes);
   app.use('/api/tasks', protect, taskRoutes);
@@ -40,7 +44,10 @@ const setupApp = (io) => {
   app.use('/api/votes', protect, authorize('BOARD_MEMBER'), voteRoutes);
   app.use('/api/submissions', protect, submissionRoutes);
 
-  // Health check
+  // FILE MANAGEMENT
+  app.use('/api/files', fileRoutes);
+
+  // ===== HEALTH CHECK =====
   app.get('/api/health', (req, res) => {
     res.json({
       success: true,
@@ -49,7 +56,7 @@ const setupApp = (io) => {
     });
   });
 
-  // 404 handler
+  // ===== 404 =====
   app.use((req, res) => {
     res.status(404).json({
       success: false,
@@ -57,9 +64,10 @@ const setupApp = (io) => {
     });
   });
 
-  // Global error handler
+  // ===== ERROR HANDLER =====
   app.use((err, req, res, next) => {
     console.error(err.stack);
+
     res.status(500).json({
       success: false,
       message: 'Internal server error',
