@@ -1,0 +1,296 @@
+const Task = require('../models/Task.js');
+const Page = require('../models/Page.js');
+const AssistantEarning = require('../models/AssistantEarning.js');
+
+// @desc    Get current assistant's assigned tasks
+// @route   GET /api/assistant/my-tasks
+// @access  ASSISTANT
+exports.getMyTasks = async (req, res) => {
+  try {
+    const tasks = await Task.find({ assignedTo: req.user._id })
+      .populate('seriesId', 'title imageUrl')
+      .populate('chapterId', 'title chapterNumber')
+      .populate('pageIds', 'pageNumber imageUrl assistantImageUrl status')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: tasks.length,
+      data: tasks,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get pages & resources for a specific task
+// @route   GET /api/assistant/tasks/:taskId/pages
+// @access  ASSISTANT
+exports.getTaskPages = async (req, res) => {
+  try {
+    const task = await Task.findOne({
+      _id: req.params.taskId,
+      assignedTo: req.user._id,
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found or not assigned to you',
+      });
+    }
+
+    const pages = await Page.find({ _id: { $in: task.pageIds } })
+      .sort({ pageNumber: 1 });
+
+    res.status(200).json({
+      success: true,
+      count: pages.length,
+      data: {
+        task,
+        pages,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Upload processed page artwork (assistant result)
+// @route   PUT /api/assistant/pages/:pageId/upload
+// @access  ASSISTANT
+exports.uploadPageResult = async (req, res) => {
+  try {
+    const { assistantImageUrl, note } = req.body;
+
+    if (!assistantImageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide assistantImageUrl',
+      });
+    }
+
+    // Find the page
+    const page = await Page.findById(req.pageId || req.params.pageId);
+    if (!page) {
+      return res.status(404).json({
+        success: false,
+        message: 'Page not found',
+      });
+    }
+
+    // Find the task associated with this page to ensure ownership
+    const task = await Task.findOne({
+      pageIds: page._id,
+      assignedTo: req.user._id,
+    });
+
+    if (!task) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not assigned to the task containing this page',
+      });
+    }
+
+    // Update the page
+    page.assistantImageUrl = assistantImageUrl;
+    page.status = 'IN_PROGRESS';
+    if (note !== undefined) {
+      page.note = note;
+    }
+    await page.save();
+
+    // If the task is still PENDING, update it to IN_PROGRESS
+    if (task.status === 'PENDING') {
+      task.status = 'IN_PROGRESS';
+      await task.save();
+      if (req.io) {
+        req.io.emit('task_in_progress', task);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Page artwork uploaded successfully',
+      data: page,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Submit a task for review
+// @route   PUT /api/assistant/tasks/:taskId/submit
+// @access  ASSISTANT
+exports.submitTask = async (req, res) => {
+  try {
+    const task = await Task.findOne({
+      _id: req.params.taskId,
+      assignedTo: req.user._id,
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found or not assigned to you',
+      });
+    }
+
+    // Update task
+    task.status = 'SUBMITTED';
+    task.submittedAt = new Date();
+    await task.save();
+
+    // Update all pages inside this task that are not yet APPROVED to COMPLETED
+    await Page.updateMany(
+      {
+        _id: { $in: task.pageIds },
+        status: { $ne: 'APPROVED' },
+      },
+      {
+        status: 'COMPLETED',
+      }
+    );
+
+    // Fetch updated task with populated details for event/response
+    const populatedTask = await Task.findById(task._id)
+      .populate('seriesId', 'title')
+      .populate('chapterId', 'chapterNumber');
+
+    if (req.io) {
+      req.io.emit('task_submitted', populatedTask);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Task submitted for review successfully',
+      data: populatedTask,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get earnings tracking
+// @route   GET /api/assistant/earnings
+// @access  ASSISTANT
+exports.getEarnings = async (req, res) => {
+  try {
+    const query = { assistantId: req.user._id };
+    if (req.query.month) {
+      query.month = req.query.month; // format: "YYYY-MM"
+    }
+
+    const earnings = await AssistantEarning.find(query)
+      .populate('approvedPages.pageId', 'pageNumber imageUrl assistantImageUrl')
+      .populate('approvedPages.chapterId', 'chapterNumber title')
+      .populate('approvedPages.seriesId', 'title')
+      .sort({ month: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: earnings.length,
+      data: earnings,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get details of earnings for a specific month
+// @route   GET /api/assistant/earnings/:month
+// @access  ASSISTANT
+exports.getEarningDetail = async (req, res) => {
+  try {
+    const earning = await AssistantEarning.findOne({
+      assistantId: req.user._id,
+      month: req.params.month, // format: "YYYY-MM"
+    })
+    .populate('approvedPages.pageId', 'pageNumber imageUrl assistantImageUrl')
+    .populate('approvedPages.chapterId', 'chapterNumber title')
+    .populate('approvedPages.seriesId', 'title');
+
+    if (!earning) {
+      return res.status(404).json({
+        success: false,
+        message: `No earnings found for month ${req.params.month}`,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: earning,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get stats summary for assistant
+// @route   GET /api/assistant/stats
+// @access  ASSISTANT
+exports.getStats = async (req, res) => {
+  try {
+    // 1. Calculate totals from earnings records
+    const earnings = await AssistantEarning.find({ assistantId: req.user._id });
+    
+    let totalPagesApproved = 0;
+    let totalEarning = 0;
+    
+    earnings.forEach(record => {
+      totalPagesApproved += record.totalPagesApproved;
+      totalEarning += record.totalEarning;
+    });
+
+    // 2. Count tasks by status
+    const tasks = await Task.find({ assignedTo: req.user._id });
+    
+    let pendingTasksCount = 0;
+    let submittedTasksCount = 0;
+    let approvedTasksCount = 0;
+
+    tasks.forEach(task => {
+      if (task.status === 'PENDING' || task.status === 'IN_PROGRESS' || task.status === 'REVISION_REQUESTED') {
+        pendingTasksCount++;
+      } else if (task.status === 'SUBMITTED') {
+        submittedTasksCount++;
+      } else if (task.status === 'APPROVED') {
+        approvedTasksCount++;
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalPagesApproved,
+        totalEarning,
+        pendingTasksCount,
+        submittedTasksCount,
+        approvedTasksCount,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

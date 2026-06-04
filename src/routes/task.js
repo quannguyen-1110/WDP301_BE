@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const { authorize } = require('../middleware/auth.js');
 const {
   createTask,
   submitTask,
-  getMyTasks
+  getMyTasks,
+  reviewTask
 } = require('../controllers/taskController.js');
 
 /**
@@ -43,13 +45,13 @@ const {
  *       500:
  *         description: Server error
  */
-router.post('/', createTask);
+router.post('/', authorize('MANGAKA'), createTask);
 
 /**
  * @swagger
  * /api/tasks/{id}/submit:
  *   put:
- *     summary: Mark a task as done
+ *     summary: Mark a task as submitted (Assistant)
  *     tags: [Tasks]
  *     security:
  *       - BearerAuth: []
@@ -62,15 +64,15 @@ router.post('/', createTask);
  *         description: The task ID
  *     responses:
  *       200:
- *         description: Task marked as done
+ *         description: Task marked as submitted
  *       404:
  *         description: Task not found
  */
-router.put('/:id/submit', submitTask);
+router.put('/:id/submit', authorize('ASSISTANT'), submitTask);
 
 /**
  * @swagger
- * /tasks:
+ * /api/tasks:
  *   get:
  *     summary: Get all tasks assigned to a user
  *     tags: [Tasks]
@@ -90,5 +92,42 @@ router.put('/:id/submit', submitTask);
  *         description: Server error
  */
 router.get('/', getMyTasks);
+
+/**
+ * @swagger
+ * /api/tasks/{id}/review:
+ *   put:
+ *     summary: Review assistant's task (Mangaka)
+ *     tags: [Tasks]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The task ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - action
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [APPROVE, REJECT, REVISION_REQUESTED]
+ *               reviewNote:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Task reviewed successfully
+ *       404:
+ *         description: Task not found
+ */
+router.put('/:id/review', authorize('MANGAKA'), reviewTask);
 
 module.exports = router;

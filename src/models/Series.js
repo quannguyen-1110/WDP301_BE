@@ -40,6 +40,11 @@ const seriesSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    editorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     reviewNote: {
       type: String,
       default: '',
