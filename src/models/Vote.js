@@ -17,7 +17,7 @@ const voteSchema = new mongoose.Schema(
     decision: {
       type: String,
       enum: VOTE_DECISION,
-      default: VOTE_DECISION[0],
+      required: true,
     },
     comment: String,
   },
