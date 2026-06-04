@@ -11,6 +11,9 @@ const ratingRoutes = require('./routes/rating.js');
 const rankRoutes = require('./routes/rank.js');
 const voteRoutes = require('./routes/vote.js');
 const submissionRoutes = require('./routes/submission.js');
+const assistantRoutes = require('./routes/assistant.js');
+const annotationRoutes = require('./routes/annotation.js');
+const editorRoutes = require('./routes/editor.js');
 
 const { protect, authorize } = require('./middleware/auth.js');
 
@@ -39,6 +42,9 @@ const setupApp = (io) => {
   app.use('/api/ranks', protect, rankRoutes);
   app.use('/api/votes', protect, authorize('BOARD_MEMBER'), voteRoutes);
   app.use('/api/submissions', protect, submissionRoutes);
+  app.use('/api/assistant', protect, authorize('ASSISTANT'), assistantRoutes);
+  app.use('/api/annotations', protect, annotationRoutes);
+  app.use('/api/editor', protect, authorize('EDITOR'), editorRoutes);
 
   // Health check
   app.get('/api/health', (req, res) => {

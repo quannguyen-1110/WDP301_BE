@@ -1,15 +1,47 @@
 const mongoose = require('mongoose');
 
+const TASK_STATUS = ['PENDING', 'IN_PROGRESS', 'SUBMITTED', 'APPROVED', 'REVISION_REQUESTED'];
+
 const taskSchema = new mongoose.Schema({
-  seriesId: String,
-  chapterId: String,
-  assignedTo: String, // userId
-  title: String,
+  seriesId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Series',
+    required: true,
+  },
+  chapterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Chapter',
+    required: true,
+  },
+  assignedTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  assignedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  title: {
+    type: String,
+    required: true,
+  },
+  description: String,
+  pageIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Page',
+  }],
   status: {
     type: String,
-    enum: ['PENDING', 'DONE'],
+    enum: TASK_STATUS,
     default: 'PENDING'
-  }
+  },
+  submittedAt: Date,
+  reviewNote: String,
+  reviewedAt: Date,
+  dueAt: Date,
 }, { timestamps: true });
 
 module.exports = mongoose.model('Task', taskSchema);
+module.exports.TASK_STATUS = TASK_STATUS;
