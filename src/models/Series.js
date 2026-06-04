@@ -15,6 +15,10 @@ const seriesSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    imageUrl: {
+      type: String,
+      default: '',
+    },
     mangakaId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
