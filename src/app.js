@@ -14,6 +14,7 @@ const submissionRoutes = require('./routes/submission.js');
 const assistantRoutes = require('./routes/assistant.js');
 const annotationRoutes = require('./routes/annotation.js');
 const editorRoutes = require('./routes/editor.js');
+const rankingsRoutes = require('./routes/rankings.js');
 
 // FILE ROUTES
 const fileRoutes = require('./routes/file.js');
@@ -49,6 +50,7 @@ const setupApp = (io) => {
   app.use('/api/assistant', protect, authorize('ASSISTANT'), assistantRoutes);
   app.use('/api/annotations', protect, annotationRoutes);
   app.use('/api/editor', protect, authorize('EDITOR'), editorRoutes);
+  app.use('/api/rankings', rankingsRoutes);
 
   // FILE MANAGEMENT
   app.use('/api/files', fileRoutes);
