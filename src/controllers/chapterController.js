@@ -28,6 +28,7 @@ exports.getAllChapters = async (req, res) => {
   }
 };
 
+// CREATE CHAPTER
 exports.createChapter = async (req, res) => {
   try {
     const { seriesId, title, chapterNumber } = req.body;
