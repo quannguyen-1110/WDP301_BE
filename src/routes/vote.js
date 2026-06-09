@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { submitVote, getMyVotes, updateVote, deleteVote } = require('../controllers/voteController.js');
+const { submitVote, getMyVotes, updateVote, deleteVote, getVotesBySubmission } = require('../controllers/voteController.js');
 
 /**
  * @swagger
@@ -67,6 +67,29 @@ router.get('/me', getMyVotes);
 
 /**
  * @swagger
+ * /api/votes/submission/{id}:
+ *   get:
+ *     summary: Get all votes for a submission
+ *     tags: [Votes (BOARD_MEMBER)]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The submission ID
+ *     responses:
+ *       200:
+ *         description: List of votes returned
+ *       500:
+ *         description: Server error
+ */
+router.get('/submission/:id', getVotesBySubmission);
+
+/**
+ * @swagger
  * /api/votes/{voteId}:
  *   put:
  *     summary: Update a vote
@@ -110,7 +133,5 @@ router.put('/:voteId', updateVote);
  *         description: Server error
  */
 router.delete('/:voteId', deleteVote);
-
-
 
 module.exports = router;

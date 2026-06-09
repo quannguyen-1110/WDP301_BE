@@ -110,3 +110,24 @@ exports.getMyVotes = async (req, res) => {
     });
   }
 };
+
+// @desc    Get all votes for a submission
+// @route   GET /api/votes/submission/:id
+// @access  BOARD_MEMBER
+exports.getVotesBySubmission = async (req, res) => {
+  try {
+    const votes = await Vote.find({ submissionId: req.params.id })
+      .populate('voterId', 'name email');
+
+    res.status(200).json({
+      success: true,
+      count: votes.length,
+      data: votes,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

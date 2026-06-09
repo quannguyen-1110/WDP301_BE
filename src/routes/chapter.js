@@ -1,13 +1,35 @@
 const express = require('express');
 const router = express.Router();
 const { authorize } = require('../middleware/auth.js');
-const { createChapter, updateChapter, deleteChapter, publishChapter } = require('../controllers/chapterController.js');
+const { getAllChapters, createChapter, updateChapter, deleteChapter, publishChapter } = require('../controllers/chapterController.js');
+
+/**
+ * @swagger
+ * /api/chapters:
+ *   get:
+ *     summary: Get all chapters, filter by ?seriesId= (Editor, Board Member)
+ *     tags: [Chapters]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: seriesId
+ *         schema:
+ *           type: string
+ *         description: Filter by series ID
+ *     responses:
+ *       200:
+ *         description: List of chapters returned
+ *       500:
+ *         description: Server error
+ */
+router.get('/', authorize('EDITOR', 'BOARD_MEMBER'), getAllChapters);
 
 /**
  * @swagger
  * /api/chapters:
  *   post:
- *     summary: Create a new chapter (Mangaka)
+ *     summary: Create a new chapter (Editor)
  *     tags: [Chapters]
  *     security:
  *       - BearerAuth: []
@@ -36,7 +58,7 @@ const { createChapter, updateChapter, deleteChapter, publishChapter } = require(
  *       500:
  *         description: Server error
  */
-router.post('/', authorize('MANGAKA') ,createChapter);
+router.post('/', authorize('MANGAKA', 'EDITOR'), createChapter);
 
 /**
  * @swagger

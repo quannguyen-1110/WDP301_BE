@@ -5,6 +5,29 @@ const CHAPTER_STATUS = {
   COMPLETED: 'COMPLETED',
 };
 
+exports.getAllChapters = async (req, res) => {
+  try {
+    const { seriesId } = req.query;
+    const filter = {};
+    if (seriesId) filter.seriesId = seriesId;
+
+    const chapters = await Chapter.find(filter)
+      .populate('seriesId', 'title')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: chapters.length,
+      data: chapters,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 exports.createChapter = async (req, res) => {
   try {
     const chapter = await Chapter.create(req.body);
