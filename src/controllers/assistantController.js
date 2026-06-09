@@ -167,7 +167,7 @@ exports.submitTask = async (req, res) => {
       .populate('chapterId', 'chapterNumber');
 
     if (req.io) {
-      req.io.emit('task_submitted', populatedTask);
+      req.io.emit('task_done', populatedTask);
     }
 
     res.status(200).json({

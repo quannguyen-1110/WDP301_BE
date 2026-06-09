@@ -18,6 +18,8 @@ const rankingsRoutes = require('./routes/rankings.js');
 
 // FILE ROUTES
 const fileRoutes = require('./routes/file.js');
+const userRoutes = require('./routes/users.js');
+const proposalRoutes = require('./routes/proposal.js');
 
 const { protect, authorize } = require('./middleware/auth.js');
 
@@ -40,6 +42,8 @@ const setupApp = (io) => {
 
   // ===== ROUTES =====
   app.use('/api/auth', authRoutes);
+  app.use('/api/users', protect, userRoutes);
+  app.use('/api/series/proposal', protect, proposalRoutes);
   app.use('/api/series', protect, seriesRoutes);
   app.use('/api/tasks', protect, taskRoutes);
   app.use('/api/chapters', protect, chapterRoutes);
