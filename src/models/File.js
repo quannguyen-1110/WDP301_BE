@@ -30,6 +30,7 @@ const fileSchema = new mongoose.Schema(
     roleUploaded: {
       type: String,
       enum: ["MANGAKA", "ASSISTANT"],
+      required: true,
     },
   },
   {
