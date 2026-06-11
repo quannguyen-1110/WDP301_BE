@@ -10,6 +10,13 @@ const {
   getStats,
 } = require('../controllers/assistantController.js');
 
+// Import middleware bảo mật xác thực
+const { protect, authorize } = require('../middleware/auth.js');
+
+// Áp dụng xác thực bắt buộc cho vai trò ASSISTANT
+router.use(protect);
+router.use(authorize('ASSISTANT'));
+
 /**
  * @swagger
  * /api/assistant/my-tasks:
