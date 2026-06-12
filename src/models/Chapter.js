@@ -29,6 +29,7 @@ const chapterSchema = new mongoose.Schema(
       default: "IN_PROGRESS",
     },
 
+    // BE lưu thật trong DB
     dueAt: {
       type: Date,
     },
@@ -52,5 +53,21 @@ const chapterSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Virtual để FE đọc được field "deadline"
+chapterSchema.virtual("deadline").get(function () {
+  if (!this.dueAt) return "";
+
+  return this.dueAt.toISOString().split("T")[0];
+});
+
+// Cho phép virtual xuất ra JSON
+chapterSchema.set("toJSON", {
+  virtuals: true,
+});
+
+chapterSchema.set("toObject", {
+  virtuals: true,
+});
 
 module.exports = mongoose.model("Chapter", chapterSchema);

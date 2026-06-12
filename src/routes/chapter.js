@@ -1,8 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const { authorize } = require('../middleware/auth.js');
-const { getAllChapters, createChapter, updateChapter, deleteChapter, publishChapter } = require('../controllers/chapterController.js');
 
+const { protect, authorize } = require('../middleware/auth.js');
+
+router.use(protect);
+
+const {
+  getAllChapters,
+  createChapter,
+  updateChapter,
+  deleteChapter,
+  publishChapter,
+} = require('../controllers/chapterController.js');
 /**
  * @swagger
  * /api/chapters:
