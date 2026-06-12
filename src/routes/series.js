@@ -91,7 +91,7 @@ router.get('/:id', getSeriesById);
  * @swagger
  * /api/series/{id}/review:
  *   put:
- *     summary: Approve or reject a series proposal (EDITOR only)
+ *     summary: Approve or reject a series proposal (EDITOR & BOARD_MEMBER only)
  *     tags: [Series]
  *     security:
  *       - BearerAuth: []
@@ -126,9 +126,9 @@ router.get('/:id', getSeriesById);
  *       200:
  *         description: Series reviewed and updated successfully
  *       403:
- *         description: Forbidden - Only EDITOR can access this route
+ *         description: Forbidden - Only EDITOR or BOARD_MEMBER can access this route
  */
-router.put('/:id/review', authorize('EDITOR'), reviewSeries);
+router.put('/:id/review', authorize('EDITOR', 'BOARD_MEMBER'), reviewSeries);
 
 /**
  * @swagger

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getSeriesRatings, submitRating, updateRating, deleteRating } = require('../controllers/ratingController.js');
+const { getSeriesRatings, submitRating, updateRating, deleteRating, getAllRatings } = require('../controllers/ratingController.js');
 const { authorize } = require('../middleware/auth.js');
 
 /**
@@ -109,5 +109,21 @@ router.delete('/:ratingId', authorize('EDITOR'), deleteRating);
  *         description: Server error
  */
 router.get('/:seriesId', getSeriesRatings);
+
+/**
+ * @swagger
+ * /api/ratings:
+ *   get:
+ *     summary: Get all ratings
+ *     tags: [Ratings]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of ratings returned
+ *       500:
+ *         description: Server error
+ */
+router.get('/', getAllRatings);
 
 module.exports = router;

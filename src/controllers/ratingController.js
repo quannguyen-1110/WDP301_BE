@@ -148,3 +148,18 @@ exports.getSeriesRatings = async (req, res) => {
     });
   }
 };
+
+exports.getAllRatings = async (req, res) => {
+  try {
+    const ratings = await Rating.find({});
+    res.status(200).json({
+      success: true,
+      data: ratings,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
