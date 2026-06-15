@@ -128,7 +128,7 @@ router.get('/:id', getSeriesById);
  *       403:
  *         description: Forbidden - Only EDITOR can access this route
  */
-router.put('/:id/review', authorize('EDITOR'), reviewSeries);
+router.put('/:id/review', authorize('EDITOR', 'BOARD_MEMBER'), reviewSeries);
 
 /**
  * @swagger

@@ -159,6 +159,9 @@ exports.updateSeriesStatus = async (req, res) => {
       PENDING: ['APPROVED', 'REJECTED'],
       APPROVED: ['IN_PRODUCTION', 'CANCELLED'],
       IN_PRODUCTION: ['PUBLISHED', 'CANCELLED'],
+      PUBLISHED: ['CANCELLED', 'IN_PRODUCTION'],
+      CANCELLED: ['IN_PRODUCTION', 'PENDING'],
+      REJECTED: ['PENDING'],
     };
 
     const series = await Series.findById(req.params.id);
