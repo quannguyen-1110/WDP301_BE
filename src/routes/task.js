@@ -93,7 +93,7 @@ router.put('/:id/submit', authorize('ASSISTANT'), submitTask);
  */
 router.get(
   '/',
-  authorize('MANGAKA', 'ASSISTANT'),
+  authorize('MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'),
   getMyTasks
 );
 

@@ -71,7 +71,7 @@ router.post('/', authorize('EDITOR', 'MANGAKA'), createAnnotation);
  *       200:
  *         description: List of annotations returned successfully
  */
-router.get('/page/:pageId', authorize('EDITOR', 'MANGAKA', 'ASSISTANT'), getAnnotationsByPage);
+router.get('/page/:pageId', authorize('EDITOR', 'MANGAKA', 'ASSISTANT', 'BOARD_MEMBER'), getAnnotationsByPage);
 
 /**
  * @swagger

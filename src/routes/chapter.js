@@ -32,7 +32,7 @@ const {
  *       500:
  *         description: Server error
  */
-router.get('/', authorize('EDITOR', 'BOARD_MEMBER'), getAllChapters);
+router.get('/', authorize('EDITOR', 'BOARD_MEMBER', 'MANGAKA', 'ASSISTANT'), getAllChapters);
 
 /**
  * @swagger
