@@ -5,10 +5,20 @@ const AssistantEarning = require('../models/AssistantEarning.js');
 
 exports.createTask = async (req, res) => {
   try {
-    const { seriesId, chapterId, assignedTo, title, description, pageIds, dueAt } = req.body;
+    const {
+      seriesId,
+      chapterId,
+      assignedTo,
+      title,
+      description,
+      pageIds,
+      dueAt,
+      region,
+    } = req.body;
 
     // Validate assignedTo user role
     const assistant = await User.findById(assignedTo);
+
     if (!assistant || assistant.role !== 'ASSISTANT') {
       return res.status(400).json({
         success: false,
@@ -20,14 +30,15 @@ exports.createTask = async (req, res) => {
       seriesId,
       chapterId,
       assignedTo,
-      assignedBy: req.user._id, // The creator (Mangaka)
+      assignedBy: req.user._id,
       title,
       description,
       pageIds: pageIds || [],
       dueAt,
+      region: region || null,
     });
 
-    // Update status of assigned pages to HAS_TASK
+    // Update assigned pages
     if (pageIds && pageIds.length > 0) {
       await Page.updateMany(
         { _id: { $in: pageIds } },
@@ -36,9 +47,9 @@ exports.createTask = async (req, res) => {
     }
 
     if (req.io) {
-      req.io.emit('task_assigned', task); // realtime
+      req.io.emit('task_assigned', task);
     }
-    
+
     res.status(201).json({
       success: true,
       data: task,
@@ -55,11 +66,13 @@ exports.submitTask = async (req, res) => {
   try {
     const task = await Task.findByIdAndUpdate(
       req.params.id,
-      { 
+      {
         status: 'SUBMITTED',
-        submittedAt: new Date()
+        submittedAt: new Date(),
       },
-      { new: true }
+      {
+        new: true,
+      }
     );
 
     if (!task) {
@@ -69,7 +82,7 @@ exports.submitTask = async (req, res) => {
       });
     }
 
-    // Update all pages inside this task that are not yet APPROVED to COMPLETED
+    // Update page status
     await Page.updateMany(
       {
         _id: { $in: task.pageIds },
@@ -81,9 +94,9 @@ exports.submitTask = async (req, res) => {
     );
 
     if (req.io) {
-      req.io.emit('task_done', task); // realtime
+      req.io.emit('task_done', task);
     }
-    
+
     res.status(200).json({
       success: true,
       data: task,
@@ -98,12 +111,15 @@ exports.submitTask = async (req, res) => {
 
 exports.getMyTasks = async (req, res) => {
   try {
-    const userId = req.user ? req.user._id : req.query.userId;
-    const tasks = await Task.find({ assignedTo: userId })
+    const userId = req.user._id;
+
+    const tasks = await Task.find({
+      assignedTo: userId,
+    })
       .populate('seriesId', 'title')
       .populate('chapterId', 'chapterNumber')
       .populate('pageIds');
-      
+
     res.status(200).json({
       success: true,
       data: tasks,
@@ -116,21 +132,23 @@ exports.getMyTasks = async (req, res) => {
   }
 };
 
-// @desc    Mangaka review assistant's submitted task
-// @route   PUT /api/tasks/:id/review
-// @access  MANGAKA
+// Mangaka review assistant task
 exports.reviewTask = async (req, res) => {
   try {
-    const { action, reviewNote } = req.body; // 'APPROVE' or 'REJECT' / 'REVISION_REQUESTED'
+    const { action, reviewNote } = req.body;
 
-    if (!['APPROVE', 'REJECT', 'REVISION_REQUESTED'].includes(action)) {
+    if (
+      !['APPROVE', 'REJECT', 'REVISION_REQUESTED'].includes(action)
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Action must be 'APPROVE', 'REJECT', or 'REVISION_REQUESTED'",
+        message:
+          "Action must be 'APPROVE', 'REJECT', or 'REVISION_REQUESTED'",
       });
     }
 
     const task = await Task.findById(req.params.id);
+
     if (!task) {
       return res.status(404).json({
         success: false,
@@ -141,30 +159,38 @@ exports.reviewTask = async (req, res) => {
     if (action === 'APPROVE') {
       task.status = 'APPROVED';
       task.reviewedAt = new Date();
-      task.reviewNote = reviewNote || 'Approved by author';
+      task.reviewNote =
+        reviewNote || 'Approved by author';
+
       await task.save();
 
-      // Update all pages inside this task to APPROVED
       await Page.updateMany(
-        { _id: { $in: task.pageIds } },
-        { 
-          status: 'APPROVED', 
-          reviewNote: reviewNote || 'Approved by author',
-          approvedAt: new Date() 
+        {
+          _id: { $in: task.pageIds },
+        },
+        {
+          status: 'APPROVED',
+          reviewNote:
+            reviewNote || 'Approved by author',
+          approvedAt: new Date(),
         }
       );
 
-      // Calculate and update assistant earnings
+      // Assistant earning
       const pagesCount = task.pageIds.length;
+
       if (pagesCount > 0) {
         const now = new Date();
-        const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-        // Find or create assistant monthly earning record
-        let earning = await AssistantEarning.findOne({
-          assistantId: task.assignedTo,
-          month: monthStr,
-        });
+        const monthStr = `${now.getFullYear()}-${String(
+          now.getMonth() + 1
+        ).padStart(2, '0')}`;
+
+        let earning =
+          await AssistantEarning.findOne({
+            assistantId: task.assignedTo,
+            month: monthStr,
+          });
 
         if (!earning) {
           earning = new AssistantEarning({
@@ -177,23 +203,37 @@ exports.reviewTask = async (req, res) => {
           });
         }
 
-        const existingApprovedPageIds = earning.approvedPages.map(ap => ap.pageId.toString());
+        const existingApprovedPageIds =
+          earning.approvedPages.map((ap) =>
+            ap.pageId.toString()
+          );
+
         let addedPagesCount = 0;
 
         for (const pageId of task.pageIds) {
-          if (!existingApprovedPageIds.includes(pageId.toString())) {
+          if (
+            !existingApprovedPageIds.includes(
+              pageId.toString()
+            )
+          ) {
             earning.approvedPages.push({
               pageId,
               chapterId: task.chapterId,
               seriesId: task.seriesId,
               approvedAt: new Date(),
             });
+
             addedPagesCount++;
           }
         }
 
-        earning.totalPagesApproved += addedPagesCount;
-        earning.totalEarning = earning.totalPagesApproved * earning.ratePerPage;
+        earning.totalPagesApproved +=
+          addedPagesCount;
+
+        earning.totalEarning =
+          earning.totalPagesApproved *
+          earning.ratePerPage;
+
         await earning.save();
       }
 
@@ -201,32 +241,42 @@ exports.reviewTask = async (req, res) => {
         req.io.emit('task_approved', task);
       }
     } else {
-      // REJECT or REVISION_REQUESTED
       task.status = 'REVISION_REQUESTED';
       task.reviewedAt = new Date();
-      task.reviewNote = reviewNote || 'Revision requested by author';
+      task.reviewNote =
+        reviewNote ||
+        'Revision requested by author';
+
       await task.save();
 
-      // Update pages that are not already APPROVED to REVISION_REQUESTED
       await Page.updateMany(
-        { 
+        {
           _id: { $in: task.pageIds },
-          status: { $ne: 'APPROVED' }
+          status: { $ne: 'APPROVED' },
         },
-        { 
+        {
           status: 'REVISION_REQUESTED',
-          reviewNote: reviewNote || 'Revision requested by author'
+          reviewNote:
+            reviewNote ||
+            'Revision requested by author',
         }
       );
 
       if (req.io) {
-        req.io.emit('task_revision_requested', task);
+        req.io.emit(
+          'task_revision_requested',
+          task
+        );
       }
     }
 
     res.status(200).json({
       success: true,
-      message: `Task has been ${action === 'APPROVE' ? 'approved' : 'returned for revision'} successfully`,
+      message: `Task has been ${
+        action === 'APPROVE'
+          ? 'approved'
+          : 'returned for revision'
+      } successfully`,
       data: task,
     });
   } catch (error) {
@@ -235,4 +285,4 @@ exports.reviewTask = async (req, res) => {
       message: error.message,
     });
   }
-};
+};

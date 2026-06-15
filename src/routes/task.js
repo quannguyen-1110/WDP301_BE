@@ -91,7 +91,11 @@ router.put('/:id/submit', authorize('ASSISTANT'), submitTask);
  *       500:
  *         description: Server error
  */
-router.get('/', getMyTasks);
+router.get(
+  '/',
+  authorize('MANGAKA', 'ASSISTANT'),
+  getMyTasks
+);
 
 /**
  * @swagger
