@@ -3,6 +3,7 @@ const Chapter = require('../models/Chapter.js');
 const Page = require('../models/Page.js');
 const Rating = require('../models/Rating.js');
 const SeriesRank = require('../models/SeriesRank.js');
+const Task = require('../models/Task.js');
 
 // @desc    Get series managed by the editor
 // @route   GET /api/editor/my-series
@@ -157,8 +158,8 @@ exports.getDashboard = async (req, res) => {
       status: { $ne: 'COMPLETED' },
       dueAt: { $ne: null },
     })
-    .populate('seriesId', 'title')
-    .sort({ dueAt: 1 });
+      .populate('seriesId', 'title')
+      .sort({ dueAt: 1 });
 
     const overdueChapters = upcomingDeadlines.filter(c => new Date(c.dueAt) < new Date());
     const nearDueChapters = upcomingDeadlines.filter(c => new Date(c.dueAt) >= new Date());
@@ -185,6 +186,179 @@ exports.getDashboard = async (req, res) => {
             dueAt: c.dueAt,
           })),
         },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+  exports.getTaskStatistics = async (req, res) => {
+  try {
+    const series = await Series.findOne({
+      _id: req.params.seriesId,
+      editorId: req.user._id,
+    });
+
+    if (!series) {
+      return res.status(404).json({
+        success: false,
+        message: 'Series not found',
+      });
+    }
+
+    const totalTasks = await Task.countDocuments({
+      seriesId: series._id,
+    });
+
+    const pendingTasks = await Task.countDocuments({
+      seriesId: series._id,
+      status: 'PENDING',
+    });
+
+    const inProgressTasks = await Task.countDocuments({
+      seriesId: series._id,
+      status: 'IN_PROGRESS',
+    });
+
+    const submittedTasks = await Task.countDocuments({
+      seriesId: series._id,
+      status: 'SUBMITTED',
+    });
+
+    const approvedTasks = await Task.countDocuments({
+      seriesId: series._id,
+      status: 'APPROVED',
+    });
+
+    const revisionTasks = await Task.countDocuments({
+      seriesId: series._id,
+      status: 'REVISION_REQUESTED',
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalTasks,
+        pendingTasks,
+        inProgressTasks,
+        submittedTasks,
+        approvedTasks,
+        revisionTasks,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.getOverdueTasks = async (req, res) => {
+  try {
+    const series = await Series.findOne({
+      _id: req.params.seriesId,
+      editorId: req.user._id,
+    });
+
+    if (!series) {
+      return res.status(404).json({
+        success: false,
+        message: 'Series not found',
+      });
+    }
+
+    const overdueTasks = await Task.find({
+      seriesId: series._id,
+      dueAt: { $lt: new Date() },
+      status: { $nin: ['APPROVED'] },
+    })
+      .populate('assignedTo', 'name email')
+      .populate('chapterId', 'chapterNumber');
+
+    res.status(200).json({
+      success: true,
+      count: overdueTasks.length,
+      data: overdueTasks,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+console.log('getTaskStatistics:', typeof exports.getTaskStatistics);
+console.log('getOverdueTasks:', typeof exports.getOverdueTasks);
+
+// @desc    Production overview dashboard
+// @route   GET /api/editor/dashboard/production-overview
+// @access  EDITOR
+
+exports.getProductionOverview = async (req, res) => {
+  try {
+    const mySeries = await Series.find({
+      editorId: req.user._id,
+    });
+
+    const seriesIds = mySeries.map((s) => s._id);
+
+    const totalSeries = mySeries.length;
+
+    const totalTasks = await Task.countDocuments({
+      seriesId: { $in: seriesIds },
+    });
+
+    const completedTasks = await Task.countDocuments({
+      seriesId: { $in: seriesIds },
+      status: 'APPROVED',
+    });
+
+    const overdueTasks = await Task.countDocuments({
+      seriesId: { $in: seriesIds },
+      dueAt: { $lt: new Date() },
+      status: {
+        $nin: ['APPROVED'],
+      },
+    });
+
+    const totalPages = await Page.countDocuments({
+      chapterId: {
+        $in: await Chapter.find({
+          seriesId: { $in: seriesIds },
+        }).distinct('_id'),
+      },
+    });
+
+    const approvedPages = await Page.countDocuments({
+      chapterId: {
+        $in: await Chapter.find({
+          seriesId: { $in: seriesIds },
+        }).distinct('_id'),
+      },
+      status: 'APPROVED',
+    });
+
+    const productionProgress =
+      totalPages > 0
+        ? Math.round(
+            (approvedPages / totalPages) * 100
+          )
+        : 0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalSeries,
+        totalTasks,
+        completedTasks,
+        overdueTasks,
+        totalPages,
+        approvedPages,
+        productionProgress,
       },
     });
   } catch (error) {
