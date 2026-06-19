@@ -20,6 +20,7 @@ const rankingsRoutes = require('./routes/rankings.js');
 const fileRoutes = require('./routes/file.js');
 const userRoutes = require('./routes/users.js');
 const proposalRoutes = require('./routes/proposal.js');
+const notificationRoutes = require('./routes/notification.js');
 
 const { protect, authorize } = require('./middleware/auth.js');
 
@@ -55,6 +56,7 @@ const setupApp = (io) => {
   app.use('/api/annotations', protect, annotationRoutes);
   app.use('/api/editor', protect, authorize('EDITOR'), editorRoutes);
   app.use('/api/rankings', rankingsRoutes);
+  app.use('/api/notifications', protect, notificationRoutes);
 
   // FILE MANAGEMENT
   app.use('/api/files', fileRoutes);
