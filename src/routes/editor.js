@@ -1,10 +1,14 @@
 const express = require('express');
 const router = express.Router();
+
 const {
   getMySeries,
   getSeriesStats,
   getSeriesProgress,
   getDashboard,
+  getTaskStatistics,
+  getOverdueTasks,
+  getProductionOverview,
 } = require('../controllers/editorController.js');
 
 /**
@@ -15,9 +19,6 @@ const {
  *     tags: [Editor]
  *     security:
  *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: List of editor's series returned successfully
  */
 router.get('/my-series', getMySeries);
 
@@ -29,17 +30,6 @@ router.get('/my-series', getMySeries);
  *     tags: [Editor]
  *     security:
  *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: seriesId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Series metrics returned successfully
- *       404:
- *         description: Series not found or not assigned to editor
  */
 router.get('/series/:seriesId/stats', getSeriesStats);
 
@@ -51,32 +41,60 @@ router.get('/series/:seriesId/stats', getSeriesStats);
  *     tags: [Editor]
  *     security:
  *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: seriesId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Series chapters production progress returned successfully
- *       404:
- *         description: Series not found or not assigned to editor
  */
 router.get('/series/:seriesId/progress', getSeriesProgress);
 
 /**
  * @swagger
- * /api/editor/dashboard:
+ * /api/editor/series/{seriesId}/tasks/statistics:
  *   get:
- *     summary: Editor quick overview dashboard (series list, total chapters, upcoming deadlines)
+ *     summary: Get task statistics of a series
  *     tags: [Editor]
  *     security:
  *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: Editor dashboard statistics returned successfully
+ */
+router.get(
+  '/series/:seriesId/tasks/statistics',
+  getTaskStatistics
+);
+
+/**
+ * @swagger
+ * /api/editor/series/{seriesId}/overdue-tasks:
+ *   get:
+ *     summary: Get overdue tasks of a series
+ *     tags: [Editor]
+ *     security:
+ *       - BearerAuth: []
+ */
+router.get(
+  '/series/:seriesId/overdue-tasks',
+  getOverdueTasks
+);
+
+/**
+ * @swagger
+ * /api/editor/dashboard:
+ *   get:
+ *     summary: Editor dashboard overview
+ *     tags: [Editor]
+ *     security:
+ *       - BearerAuth: []
  */
 router.get('/dashboard', getDashboard);
+
+/**
+ * @swagger
+ * /api/editor/dashboard/production-overview:
+ *   get:
+ *     summary: Production overview dashboard
+ *     tags: [Editor]
+ *     security:
+ *       - BearerAuth: []
+ */
+router.get(
+  '/dashboard/production-overview',
+  getProductionOverview
+);
 
 module.exports = router;
