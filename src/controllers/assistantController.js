@@ -1,6 +1,8 @@
 const Task = require('../models/Task.js');
 const Page = require('../models/Page.js');
 const AssistantEarning = require('../models/AssistantEarning.js');
+const Series = require('../models/Series.js');
+const User = require('../models/User.js');
 
 // @desc    Get current assistant's assigned tasks
 // @route   GET /api/assistant/my-tasks
@@ -285,6 +287,102 @@ exports.getStats = async (req, res) => {
         pendingTasksCount,
         submittedTasksCount,
         approvedTasksCount,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// @desc Get income dashboard tasks
+// @route GET /api/assistant/income/tasks
+// @access ASSISTANT
+exports.getIncomeTasks = async (req, res) => {
+  try {
+    const earnings = await AssistantEarning.find({
+      assistantId: req.user._id,
+    }).populate('approvedPages.seriesId', 'title');
+
+    let totalEarnings = 0;
+    let totalCompletedTasks = 0;
+    const tasks = [];
+
+    earnings.forEach(record => {
+      totalEarnings += record.totalEarning;
+
+      record.approvedPages.forEach(page => {
+        totalCompletedTasks++;
+
+        tasks.push({
+          _id: page.pageId,
+          title: `Approved Page`,
+          series: page.seriesId?.title || 'Unknown',
+          approvedAt: page.approvedAt,
+          earnings: record.ratePerPage,
+        });
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalEarnings,
+        totalCompletedTasks,
+        nextPayoutDate: null,
+        tasks,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// @desc Get income analytics chart
+// @route GET /api/assistant/income/analytics
+// @access ASSISTANT
+exports.getIncomeAnalytics = async (req, res) => {
+  try {
+    const earnings = await AssistantEarning.find({
+      assistantId: req.user._id,
+    }).sort({ month: 1 });
+
+    const data = earnings.map(item => ({
+      month: item.month,
+      amount: item.totalEarning,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// @desc Get payout account
+// @route GET /api/assistant/payout-account
+// @access ASSISTANT
+exports.getPayoutAccount = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        cardholder: user.name,
+        bankName: user.bankName || 'Not Updated',
+        cardNumberLast4:
+  user.accountNumber
+    ? user.accountNumber.slice(-4)
+    : '----',
+        status: 'Active',
       },
     });
   } catch (error) {
