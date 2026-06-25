@@ -65,7 +65,7 @@ const setupApp = (io) => {
   app.use('/api/notifications', protect, notificationRoutes);
 
   // FILE MANAGEMENT
-  app.use('/api/files', fileRoutes);
+  app.use('/api/files', protect, fileRoutes);
 
   // ===== HEALTH CHECK =====
   app.get('/api/health', (req, res) => {
