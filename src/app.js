@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const { swaggerUi, specs } = require('./config/swagger.js');
+const path = require('path');
 
 const authRoutes = require('./routes/auth.js');
 const seriesRoutes = require('./routes/series.js');
@@ -31,7 +32,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
-
+app.use(
+  '/uploads',
+  express.static(path.join(process.cwd(), 'src/uploads'))
+);
 // ===== SWAGGER API DOCS =====
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
