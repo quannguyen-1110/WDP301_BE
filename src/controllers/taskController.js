@@ -13,7 +13,7 @@ exports.createTask = async (req, res) => {
       description,
       pageIds,
       dueAt,
-      region,
+      regions,
     } = req.body;
 
     // Validate assignedTo user role
@@ -35,7 +35,7 @@ exports.createTask = async (req, res) => {
       description,
       pageIds: pageIds || [],
       dueAt,
-      region: region || null,
+      regions: regions || [],
     });
 
     // Update assigned pages
@@ -46,6 +46,7 @@ exports.createTask = async (req, res) => {
       );
     }
 
+    // Realtime Socket
     if (req.io) {
       req.io.emit('task_assigned', task);
     }

@@ -50,24 +50,22 @@ const taskSchema = new mongoose.Schema(
     ],
 
     // ===== Canvas Region =====
-    region: {
-      x: {
-        type: Number,
-      },
-      y: {
-        type: Number,
-      },
-      width: {
-        type: Number,
-      },
-      height: {
-        type: Number,
-      },
-      type: {
-        type: String,
-        default: 'TASK_ZONE',
-      },
+    regions: [
+  {
+    x: Number,
+    y: Number,
+    width: Number,
+    height: Number,
+    type: {
+      type: String,
+      default: 'TASK_ZONE',
     },
+    comment: {
+      type: String,
+      default: '',
+    },
+  },
+],
 
     status: {
       type: String,
