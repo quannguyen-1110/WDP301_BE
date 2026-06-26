@@ -7,6 +7,7 @@ const {
   markAsRead,
   markAsReadAll,
 } = require("../controllers/notifcationController");
+const { authorize } = require("../middleware/auth");
 
 /**
  * @swagger
