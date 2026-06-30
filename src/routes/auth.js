@@ -1,7 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, getMe } = require('../controllers/authController');
+const { register, login, getMe, sendVerificationCode } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
+
+/**
+ * @swagger
+ * /api/auth/send-verification-code:
+ *   post:
+ *     summary: Send a 6-digit verification code to the user's email
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: mangaka@test.com
+ *     responses:
+ *       200:
+ *         description: Verification code sent
+ *       400:
+ *         description: Email already exists or missing
+ */
+router.post('/send-verification-code', sendVerificationCode);
 
 /**
  * @swagger
@@ -20,6 +46,7 @@ const { protect } = require('../middleware/auth');
  *               - email
  *               - password
  *               - role
+ *               - verificationCode
  *             properties:
  *               name:
  *                 type: string
@@ -34,6 +61,9 @@ const { protect } = require('../middleware/auth');
  *                 type: string
  *                 enum: [MANGAKA, ASSISTANT, EDITOR, BOARD_MEMBER]
  *                 example: MANGAKA
+ *               verificationCode:
+ *                 type: string
+ *                 example: "123456"
  *     responses:
  *       201:
  *         description: User registered successfully
