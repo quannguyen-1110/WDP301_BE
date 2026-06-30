@@ -8,6 +8,9 @@ const {
   getEarnings,
   getEarningDetail,
   getStats,
+  getIncomeTasks,
+getIncomeAnalytics,
+getPayoutAccount,
 } = require('../controllers/assistantController.js');
 
 // Import middleware bảo mật xác thực
@@ -171,5 +174,11 @@ router.get('/earnings/:month', getEarningDetail);
  *         description: Stats summary retrieved successfully
  */
 router.get('/stats', getStats);
+
+router.get('/income/tasks', getIncomeTasks);
+
+router.get('/income/analytics', getIncomeAnalytics);
+
+router.get('/payout-account', getPayoutAccount);
 
 module.exports = router;

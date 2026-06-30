@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Annotation = require('../models/Annotation.js');
 const Page = require('../models/Page.js');
 
@@ -12,6 +13,13 @@ exports.createAnnotation = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Please provide pageId, coords, content, and type',
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(pageId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid pageId format',
       });
     }
 
@@ -57,6 +65,14 @@ exports.createAnnotation = async (req, res) => {
 // @access  EDITOR, MANGAKA, ASSISTANT
 exports.getAnnotationsByPage = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.pageId)) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        data: [],
+      });
+    }
+
     const annotations = await Annotation.find({ pageId: req.params.pageId })
       .populate('annotatorId', 'name email role')
       .sort({ createdAt: 1 });

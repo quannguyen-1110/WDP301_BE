@@ -58,7 +58,7 @@ router.post(
       const newFile = await File.create({
         fileName: req.file.filename,
         originalName: req.file.originalname,
-        fileUrl: req.file.path,
+        fileUrl: `/uploads/${req.file.filename}`,
 
         uploadedBy: req.user._id,
         roleUploaded: req.user.role,

@@ -113,9 +113,22 @@ exports.getMyTasks = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const tasks = await Task.find({
-      assignedTo: userId,
-    })
+    let filter = {};
+
+    if (req.user.role === 'ASSISTANT') {
+      filter.assignedTo = userId;
+    } else if (req.user.role === 'MANGAKA') {
+      filter.assignedBy = userId;
+    } else {
+      filter = {
+        $or: [
+          { assignedTo: userId },
+          { assignedBy: userId },
+        ],
+      };
+    }
+
+    const tasks = await Task.find(filter)
       .populate('seriesId', 'title')
       .populate('chapterId', 'chapterNumber')
       .populate('pageIds');
