@@ -1,137 +1,41 @@
 const express = require('express');
 const router = express.Router();
-const { submitVote, getMyVotes, updateVote, deleteVote, getVotesBySubmission } = require('../controllers/voteController.js');
+const { protect, authorize } = require('../middleware/auth.js');
+
+const {
+  submitVote,
+  getMyVotes,
+  updateVote,
+  deleteVote,
+  getVotesBySubmission
+} = require('../controllers/voteController.js');
+
+// Protect all routes
+router.use(protect);
 
 /**
- * @swagger
- * /api/votes:
- *   post:
- *     summary: Submit a vote on a submission
- *     tags: [Votes (BOARD_MEMBER)]
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - submissionId
- *               - voterId
- *               - decision
- *             properties:
- *               submissionId:
- *                 type: string
- *                 example: 665sub123...
- *               voterId:
- *                 type: string
- *                 example: 665user789...
- *               decision:
- *                 type: string
- *                 enum: [ACCEPT, REJECT]
- *                 example: ACCEPT
- *               comment:
- *                 type: string
- *                 example: Great work on the shading!
- *     responses:
- *       201:
- *         description: Vote submitted successfully
- *       500:
- *         description: Server error
+ * Submit vote
  */
-router.post('/', submitVote);
+router.post('/', authorize('ADMIN', 'BOARD_MEMBER'), submitVote);
 
 /**
- * @swagger
- * /api/votes:
- *   get:
- *     summary: Get all votes by a user
- *     tags: [Votes (BOARD_MEMBER)]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: query
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: The user ID to filter votes
- *     responses:
- *       200:
- *         description: List of votes returned
- *       500:
- *         description: Server error
+ * Get my votes
  */
-router.get('/me', getMyVotes);
+router.get('/me', authorize('ADMIN', 'BOARD_MEMBER'), getMyVotes);
 
 /**
- * @swagger
- * /api/votes/submission/{id}:
- *   get:
- *     summary: Get all votes for a submission
- *     tags: [Votes (BOARD_MEMBER)]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: The submission ID
- *     responses:
- *       200:
- *         description: List of votes returned
- *       500:
- *         description: Server error
+ * Get votes by submission
  */
-router.get('/submission/:id', getVotesBySubmission);
+router.get('/submission/:id', authorize('ADMIN', 'BOARD_MEMBER', 'EDITOR'), getVotesBySubmission);
 
 /**
- * @swagger
- * /api/votes/{voteId}:
- *   put:
- *     summary: Update a vote
- *     tags: [Votes (BOARD_MEMBER)]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: voteId
- *         required: true
- *         schema:
- *           type: string
- *         description: The vote ID to update
- *     responses:
- *       200:
- *         description: Vote updated successfully
- *       500:
- *         description: Server error
+ * Update vote
  */
-router.put('/:voteId', updateVote);
+router.put('/:voteId', authorize('ADMIN', 'BOARD_MEMBER'), updateVote);
 
 /**
- * @swagger
- * /api/votes/{voteId}:
- *   delete:
- *     summary: Delete a vote
- *     tags: [Votes (BOARD_MEMBER)]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: voteId
- *         required: true
- *         schema:
- *           type: string
- *         description: The vote ID to delete
- *     responses:
- *       200:
- *         description: Vote deleted successfully
- *       500:
- *         description: Server error
+ * Delete vote
  */
-router.delete('/:voteId', deleteVote);
+router.delete('/:voteId', authorize('ADMIN', 'BOARD_MEMBER'), deleteVote);
 
 module.exports = router;

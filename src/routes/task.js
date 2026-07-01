@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authorize } = require('../middleware/auth.js');
+const { protect } = require('../middleware/auth.js'); // Thêm protect nếu chưa có
 const {
   createTask,
   submitTask,
@@ -8,130 +9,31 @@ const {
   reviewTask
 } = require('../controllers/taskController.js');
 
-/**
- * @swagger
- * /api/tasks:
- *   post:
- *     summary: Create a new task assignment
- *     tags: [Tasks]
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - seriesId
- *               - assignedTo
- *               - title
- *             properties:
- *               seriesId:
- *                 type: string
- *                 example: 665abc123...
- *               chapterId:
- *                 type: string
- *                 example: 665def456...
- *               assignedTo:
- *                 type: string
- *                 example: 665user789...
- *               title:
- *                 type: string
- *                 example: Draw chapter 5 - Action scene
- *     responses:
- *       201:
- *         description: Task created successfully
- *       500:
- *         description: Server error
- */
-router.post('/', authorize('MANGAKA'), createTask);
+// Protect all routes
+router.use(protect);
 
 /**
- * @swagger
- * /api/tasks/{id}/submit:
- *   put:
- *     summary: Mark a task as submitted (Assistant)
- *     tags: [Tasks]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: The task ID
- *     responses:
- *       200:
- *         description: Task marked as submitted
- *       404:
- *         description: Task not found
+ * Create Task - Cho phép ADMIN và MANGAKA
+ */
+router.post('/', authorize('ADMIN', 'MANGAKA'), createTask);
+
+/**
+ * Assistant submit task
  */
 router.put('/:id/submit', authorize('ASSISTANT'), submitTask);
 
 /**
- * @swagger
- * /api/tasks:
- *   get:
- *     summary: Get all tasks assigned to a user
- *     tags: [Tasks]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: query
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: The user ID to filter tasks
- *     responses:
- *       200:
- *         description: List of tasks returned
- *       500:
- *         description: Server error
+ * Get tasks (thêm ADMIN)
  */
 router.get(
   '/',
-  authorize('MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'),
+  authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'),
   getMyTasks
 );
 
 /**
- * @swagger
- * /api/tasks/{id}/review:
- *   put:
- *     summary: Review assistant's task (Mangaka)
- *     tags: [Tasks]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: The task ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - action
- *             properties:
- *               action:
- *                 type: string
- *                 enum: [APPROVE, REJECT, REVISION_REQUESTED]
- *               reviewNote:
- *                 type: string
- *     responses:
- *       200:
- *         description: Task reviewed successfully
- *       404:
- *         description: Task not found
+ * Review task - Cho phép ADMIN và MANGAKA
  */
-router.put('/:id/review', authorize('MANGAKA'), reviewTask);
+router.put('/:id/review', authorize('ADMIN', 'MANGAKA'), reviewTask);
 
 module.exports = router;

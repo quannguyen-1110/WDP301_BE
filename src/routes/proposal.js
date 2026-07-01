@@ -16,43 +16,11 @@ const {
   approveProposal,
 } = require('../controllers/proposalController');
 
-// All routes here require protection
+// Protect all routes
 router.use(protect);
 
 /**
- * @swagger
- * /api/series/proposal:
- *   post:
- *     summary: Submit a new series proposal with storyboard (MANGAKA only)
- *     tags: [Proposals]
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required:
- *               - title
- *               - genre
- *               - synopsis
- *               - storyboard
- *             properties:
- *               title:
- *                 type: string
- *               genre:
- *                 type: string
- *               synopsis:
- *                 type: string
- *               storyboard:
- *                 type: string
- *                 format: binary
- *     responses:
- *       201:
- *         description: Proposal created
- *       403:
- *         description: Forbidden - Only MANGAKA
+ * Mangaka tạo proposal
  */
 router.post('/', authorize('MANGAKA'), upload.single('storyboard'), createProposal);
 
@@ -74,7 +42,7 @@ router.post('/', authorize('MANGAKA'), upload.single('storyboard'), createPropos
  *       200:
  *         description: Return list of proposals
  */
-router.get('/', authorize('EDITOR', 'BOARD_MEMBER'), getProposals);
+router.get('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), getProposals);
 
 /**
  * @swagger
@@ -94,27 +62,12 @@ router.get('/', authorize('EDITOR', 'BOARD_MEMBER'), getProposals);
  *       200:
  *         description: Return proposal details
  */
-router.get('/:id', authorize('EDITOR', 'BOARD_MEMBER'), getProposalById);
+router.get('/:id', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), getProposalById);
 
 /**
- * @swagger
- * /api/series/proposal/{id}/storyboard:
- *   get:
- *     summary: Download storyboard file for a proposal (EDITOR only)
- *     tags: [Proposals]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Binary file stream
+ * Download storyboard
  */
-router.get('/:id/storyboard', authorize('EDITOR'), downloadStoryboard);
+router.get('/:id/storyboard', authorize('ADMIN', 'EDITOR'), downloadStoryboard);
 
 /**
  * @swagger
@@ -232,7 +185,7 @@ router.put('/:id/resubmit', authorize('MANGAKA'), resubmitProposal);
  *       200:
  *         description: Proposal sent to board
  */
-router.put('/:id/send-to-board', authorize('EDITOR', 'BOARD_MEMBER'), sendToBoard);
+router.put('/:id/send-to-board', authorize('EDITOR'), sendToBoard);
 
 /**
  * @swagger

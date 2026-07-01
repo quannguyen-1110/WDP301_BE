@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-
+const { protect, authorize } = require('../middleware/auth');
 const {
   getMySeries,
   getSeriesStats,
@@ -11,90 +11,22 @@ const {
   getProductionOverview,
 } = require('../controllers/editorController.js');
 
-/**
- * @swagger
- * /api/editor/my-series:
- *   get:
- *     summary: Get all series managed by this Tantou Editor
- *     tags: [Editor]
- *     security:
- *       - BearerAuth: []
- */
-router.get('/my-series', getMySeries);
+// Protect all routes
+router.use(protect);
 
-/**
- * @swagger
- * /api/editor/series/{seriesId}/stats:
- *   get:
- *     summary: Get metrics & numbers of a series to defend before the editorial board
- *     tags: [Editor]
- *     security:
- *       - BearerAuth: []
- */
-router.get('/series/:seriesId/stats', getSeriesStats);
+// ADMIN + EDITOR đều được truy cập
+router.get('/my-series', authorize('ADMIN', 'EDITOR'), getMySeries);
 
-/**
- * @swagger
- * /api/editor/series/{seriesId}/progress:
- *   get:
- *     summary: Monitor real-time production progress of a studio/mangaka
- *     tags: [Editor]
- *     security:
- *       - BearerAuth: []
- */
-router.get('/series/:seriesId/progress', getSeriesProgress);
+router.get('/series/:seriesId/stats', authorize('ADMIN', 'EDITOR'), getSeriesStats);
 
-/**
- * @swagger
- * /api/editor/series/{seriesId}/tasks/statistics:
- *   get:
- *     summary: Get task statistics of a series
- *     tags: [Editor]
- *     security:
- *       - BearerAuth: []
- */
-router.get(
-  '/series/:seriesId/tasks/statistics',
-  getTaskStatistics
-);
+router.get('/series/:seriesId/progress', authorize('ADMIN', 'EDITOR'), getSeriesProgress);
 
-/**
- * @swagger
- * /api/editor/series/{seriesId}/overdue-tasks:
- *   get:
- *     summary: Get overdue tasks of a series
- *     tags: [Editor]
- *     security:
- *       - BearerAuth: []
- */
-router.get(
-  '/series/:seriesId/overdue-tasks',
-  getOverdueTasks
-);
+router.get('/series/:seriesId/tasks/statistics', authorize('ADMIN', 'EDITOR'), getTaskStatistics);
 
-/**
- * @swagger
- * /api/editor/dashboard:
- *   get:
- *     summary: Editor dashboard overview
- *     tags: [Editor]
- *     security:
- *       - BearerAuth: []
- */
-router.get('/dashboard', getDashboard);
+router.get('/series/:seriesId/overdue-tasks', authorize('ADMIN', 'EDITOR'), getOverdueTasks);
 
-/**
- * @swagger
- * /api/editor/dashboard/production-overview:
- *   get:
- *     summary: Production overview dashboard
- *     tags: [Editor]
- *     security:
- *       - BearerAuth: []
- */
-router.get(
-  '/dashboard/production-overview',
-  getProductionOverview
-);
+router.get('/dashboard', authorize('ADMIN', 'EDITOR'), getDashboard);
+
+router.get('/dashboard/production-overview', authorize('ADMIN', 'EDITOR'), getProductionOverview);
 
 module.exports = router;

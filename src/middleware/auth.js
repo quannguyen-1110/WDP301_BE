@@ -1,7 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Verify JWT token
 const protect = async (req, res, next) => {
   try {
     let token;
@@ -18,12 +17,20 @@ const protect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id);
+    req.user = await User.findById(decoded.id).select('-password'); // Thêm .select() cho an toàn
 
     if (!req.user) {
       return res.status(401).json({
         success: false,
         message: 'Not authorized - User not found',
+      });
+    }
+
+    // Kiểm tra user có bị khóa không
+    if (!req.user.isActive || req.user.deletedAt) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is inactive or deleted',
       });
     }
 
@@ -36,7 +43,6 @@ const protect = async (req, res, next) => {
   }
 };
 
-// Restrict to specific roles
 const authorize = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
