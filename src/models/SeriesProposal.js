@@ -1,6 +1,49 @@
 const mongoose = require('mongoose');
 
-const PROPOSAL_STATUS = ['PENDING', 'FORWARDED', 'REJECTED'];
+const PROPOSAL_STATUS = [
+  'SUBMITTED',
+  'UNDER_REVIEW',
+  'REVISION_REQUESTED',
+  'RESUBMITTED',
+  'APPROVED_BY_TANTOU',
+  'SENT_TO_EDITORIAL_BOARD',
+  'APPROVED',
+  'SERIES_CREATED',
+  'REJECTED',
+];
+
+const commentSchema = new mongoose.Schema(
+  {
+    authorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    authorName: {
+      type: String,
+      required: true,
+    },
+    authorRole: {
+      type: String,
+      enum: ['editor', 'mangaka', 'board'],
+      required: true,
+    },
+    content: {
+      type: String,
+      required: [true, 'Comment content is required'],
+      trim: true,
+    },
+    isInternal: {
+      type: Boolean,
+      default: false,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
 
 const seriesProposalSchema = new mongoose.Schema(
   {
@@ -34,16 +77,16 @@ const seriesProposalSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: PROPOSAL_STATUS,
-      default: 'PENDING',
+      default: 'SUBMITTED',
     },
     mangakaId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'Mangaka ID is required'],
     },
-    comment: {
-      type: String,
-      default: '',
+    comments: {
+      type: [commentSchema],
+      default: [],
     },
     submittedAt: {
       type: Date,
