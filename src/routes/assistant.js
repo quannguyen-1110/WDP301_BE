@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const { protect, authorize } = require('../middleware/auth.js');
+
 const {
   getMyTasks,
   getTaskPages,
@@ -9,176 +11,53 @@ const {
   getEarningDetail,
   getStats,
   getIncomeTasks,
-getIncomeAnalytics,
-getPayoutAccount,
+  getIncomeAnalytics,
+  getPayoutAccount,
 } = require('../controllers/assistantController.js');
 
-// Import middleware bảo mật xác thực
-const { protect, authorize } = require('../middleware/auth.js');
-
-// Áp dụng xác thực bắt buộc cho vai trò ASSISTANT
+// Protect all routes
 router.use(protect);
-router.use(authorize('ASSISTANT'));
+
+// Assistant routes (ADMIN cũng xem được để hỗ trợ)
+router.use(authorize('ADMIN', 'ASSISTANT'));
 
 /**
- * @swagger
- * /api/assistant/my-tasks:
- *   get:
- *     summary: View list of assigned tasks for current Assistant
- *     tags: [Assistant]
- *     security:
- *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: List of assigned tasks returned successfully
- *       500:
- *         description: Server error
+ * Get my tasks
  */
 router.get('/my-tasks', getMyTasks);
 
 /**
- * @swagger
- * /api/assistant/tasks/{taskId}/pages:
- *   get:
- *     summary: Get pages & resources for a specific task
- *     tags: [Assistant]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: taskId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Task pages and details returned successfully
- *       404:
- *         description: Task not found
+ * Get task pages
  */
 router.get('/tasks/:taskId/pages', getTaskPages);
 
 /**
- * @swagger
- * /api/assistant/pages/{pageId}/upload:
- *   put:
- *     summary: Upload processed page artwork (result)
- *     tags: [Assistant]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: pageId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - assistantImageUrl
- *             properties:
- *               assistantImageUrl:
- *                 type: string
- *                 example: https://res.cloudinary.com/demo/image/upload/v1234/page5_done.png
- *               note:
- *                 type: string
- *                 example: Added tone and finalized background inks.
- *     responses:
- *       200:
- *         description: Page artwork uploaded successfully
- *       404:
- *         description: Page or task not found
+ * Upload page result
  */
 router.put('/pages/:pageId/upload', uploadPageResult);
 
 /**
- * @swagger
- * /api/assistant/tasks/{taskId}/submit:
- *   put:
- *     summary: Submit a task for review
- *     tags: [Assistant]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: taskId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Task submitted successfully
- *       404:
- *         description: Task not found
+ * Submit task
  */
 router.put('/tasks/:taskId/submit', submitTask);
 
 /**
- * @swagger
- * /api/assistant/earnings:
- *   get:
- *     summary: View overall earnings and history
- *     tags: [Assistant]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: query
- *         name: month
- *         schema:
- *           type: string
- *           example: "2026-06"
- *         description: Filter by month in YYYY-MM format
- *     responses:
- *       200:
- *         description: Earnings list retrieved successfully
+ * Get earnings
  */
 router.get('/earnings', getEarnings);
 
 /**
- * @swagger
- * /api/assistant/earnings/{month}:
- *   get:
- *     summary: View details of earnings for a specific month
- *     tags: [Assistant]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: month
- *         required: true
- *         schema:
- *           type: string
- *           example: "2026-06"
- *     responses:
- *       200:
- *         description: Month earnings detail retrieved successfully
- *       404:
- *         description: Earning not found for month
+ * Get earning detail by month
  */
 router.get('/earnings/:month', getEarningDetail);
 
 /**
- * @swagger
- * /api/assistant/stats:
- *   get:
- *     summary: View overall stats summary (earnings, page count, tasks status)
- *     tags: [Assistant]
- *     security:
- *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: Stats summary retrieved successfully
+ * Get stats
  */
 router.get('/stats', getStats);
 
 router.get('/income/tasks', getIncomeTasks);
-
 router.get('/income/analytics', getIncomeAnalytics);
-
 router.get('/payout-account', getPayoutAccount);
 
 module.exports = router;

@@ -1,129 +1,41 @@
 const express = require('express');
 const router = express.Router();
-const { getSeriesRatings, submitRating, updateRating, deleteRating, getAllRatings } = require('../controllers/ratingController.js');
-const { authorize } = require('../middleware/auth.js');
+const { protect, authorize } = require('../middleware/auth.js');
+
+const {
+  getSeriesRatings,
+  submitRating,
+  updateRating,
+  deleteRating,
+  getAllRatings
+} = require('../controllers/ratingController.js');
+
+// Protect all routes
+router.use(protect);
 
 /**
- * @swagger
- * /api/ratings:
- *   post:
- *     summary: Submit a rating for a series
- *     tags: [Ratings]
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - seriesId
- *               - submittedBy
- *             properties:
- *               seriesId:
- *                 type: string
- *                 example: 665series123...
- *               voteCount:
- *                 type: number
- *                 example: 5
- *               sourceFrom:
- *                 type: string
- *                 example: community_poll
- *               submittedBy:
- *                 type: string
- *                 example: 665user789...
- *     responses:
- *       201:
- *         description: Rating submitted successfully — monthly rank updated
- *       500:
- *         description: Server error
+ * Submit rating
  */
-router.post('/', submitRating);
+router.post('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), submitRating);
 
 /**
- * @swagger
- * /api/ratings/{ratingId}:
- *   put:
- *     summary: Update a rating (Editor)
- *     tags: [Ratings]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: ratingId
- *         required: true
- *         schema:
- *           type: string
- *         description: The rating ID
- *     responses:
- *       200:
- *         description: Rating updated successfully
- *       500:
- *         description: Server error
+ * Update rating
  */
-router.put('/:ratingId', authorize('EDITOR'), updateRating);
+router.put('/:ratingId', authorize('ADMIN', 'EDITOR'), updateRating);
 
 /**
- * @swagger
- * /api/ratings/{ratingId}:
- *   delete:
- *     summary: Delete a rating (Editor)
- *     tags: [Ratings]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: ratingId
- *         required: true
- *         schema:
- *           type: string
- *         description: The rating ID
- *     responses:
- *       200:
- *         description: Rating deleted successfully
- *       500:
- *         description: Server error
+ * Delete rating
  */
-router.delete('/:ratingId', authorize('EDITOR'), deleteRating);
+router.delete('/:ratingId', authorize('ADMIN', 'EDITOR'), deleteRating);
 
 /**
- * @swagger
- * /api/ratings/{seriesId}:
- *   get:
- *     summary: Get all ratings for a series
- *     tags: [Ratings]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: seriesId
- *         required: true
- *         schema:
- *           type: string
- *         description: The series ID
- *     responses:
- *       200:
- *         description: List of ratings returned
- *       500:
- *         description: Server error
+ * Get ratings by series
  */
-router.get('/:seriesId', getSeriesRatings);
+router.get('/:seriesId', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA'), getSeriesRatings);
 
 /**
- * @swagger
- * /api/ratings:
- *   get:
- *     summary: Get all ratings
- *     tags: [Ratings]
- *     security:
- *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: List of ratings returned
- *       500:
- *         description: Server error
+ * Get all ratings
  */
-router.get('/', getAllRatings);
+router.get('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), getAllRatings);
 
 module.exports = router;

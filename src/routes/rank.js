@@ -1,114 +1,34 @@
 const express = require('express');
 const router = express.Router();
-const { authorize } = require('../middleware/auth.js');
-const { getSeriesRanks, submitRank, updateRank, deleteRank } = require('../controllers/rankController.js');
+const { protect, authorize } = require('../middleware/auth.js');
+const { 
+  getSeriesRanks, 
+  submitRank, 
+  updateRank, 
+  deleteRank 
+} = require('../controllers/rankController.js');
+
+// Protect all routes
+router.use(protect);
 
 /**
- * @swagger
- * /api/ranks:
- *   post:
- *     summary: Submit a rank entry for a series (Board Member)
- *     tags: [Ranks]
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - seriesId
- *               - rank
- *             properties:
- *               seriesId:
- *                 type: string
- *                 example: 665series123...
- *               rank:
- *                 type: number
- *                 example: 1
- *               prevRank:
- *                 type: number
- *                 example: 3
- *               rankedOn:
- *                 type: string
- *                 format: date-time
- *                 example: 2026-05-28T00:00:00Z
- *     responses:
- *       201:
- *         description: Rank created successfully
- *       500:
- *         description: Server error
+ * Submit rank (ADMIN + BOARD_MEMBER)
  */
-router.post('/', authorize('BOARD_MEMBER'), submitRank);
+router.post('/', authorize('ADMIN', 'BOARD_MEMBER'), submitRank);
 
 /**
- * @swagger
- * /api/ranks/{seriesId}:
- *   get:
- *     summary: Get the latest rank for a series
- *     tags: [Ranks]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: seriesId
- *         required: true
- *         schema:
- *           type: string
- *         description: The series ID
- *     responses:
- *       200:
- *         description: Latest rank returned
- *       500:
- *         description: Server error
+ * Get ranks
  */
-router.get('/:seriesId', getSeriesRanks);
+router.get('/:seriesId', authorize('ADMIN', 'BOARD_MEMBER', 'EDITOR', 'MANGAKA'), getSeriesRanks);
 
 /**
- * @swagger
- * /api/ranks/{id}:
- *   put:
- *     summary: Update a rank by ID (Board Member)
- *     tags: [Ranks]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: The series ID
- *     responses:
- *       200:
- *         description: Latest rank returned
- *       500:
- *         description: Server error
+ * Update rank
  */
-router.put('/:id', authorize('BOARD_MEMBER'), updateRank);
+router.put('/:id', authorize('ADMIN', 'BOARD_MEMBER'), updateRank);
 
 /**
- * @swagger
- * /api/ranks/{id}:
- *   delete:
- *     summary: Delete a rank by ID (Board Member)
- *     tags: [Ranks]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: The rank ID
- *     responses:
- *       200:
- *         description: Rank deleted
- *       500:
- *         description: Server error
+ * Delete rank
  */
-router.delete('/:id', authorize('BOARD_MEMBER'), deleteRank);
+router.delete('/:id', authorize('ADMIN', 'BOARD_MEMBER'), deleteRank);
 
 module.exports = router;

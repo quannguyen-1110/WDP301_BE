@@ -1,32 +1,67 @@
 const express = require('express');
 const router = express.Router();
-const { getUsers } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/auth');
+const {
+  getUsers,
+  getUserById,
+  createUser,
+  updateUser,
+  deleteUser,
+  toggleUserStatus
+} = require('../controllers/userController');
 
 // Protect all routes
 router.use(protect);
+
+// ==================== ADMIN ROUTES ====================
+
+/**
+ * @swagger
+ * /api/users:
+ *   post:
+ *     summary: Create new user (ADMIN only)
+ *     tags: [Users]
+ */
+router.post('/', authorize('ADMIN'), createUser);
 
 /**
  * @swagger
  * /api/users:
  *   get:
- *     summary: Get all users with optional role filtering
- *     tags: [Users]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: query
- *         name: role
- *         schema:
- *           type: string
- *           enum: [MANGAKA, ASSISTANT, EDITOR, BOARD_MEMBER]
- *         description: Filter users by role (e.g. ASSISTANT)
- *     responses:
- *       200:
- *         description: Return list of users
- *       403:
- *         description: Forbidden - Only EDITOR and MANGAKA are authorized
+ *     summary: Get all users (ADMIN & EDITOR)
  */
-router.get('/', authorize('EDITOR', 'MANGAKA'), getUsers);
+router.get('/', authorize('ADMIN', 'EDITOR'), getUsers);
+
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   get:
+ *     summary: Get user by ID
+ */
+router.get('/:id', authorize('ADMIN', 'EDITOR'), getUserById);
+
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   put:
+ *     summary: Update user (ADMIN only)
+ */
+router.put('/:id', authorize('ADMIN'), updateUser);
+
+/**
+ * @swagger
+ * /api/users/{id}/status:
+ *   put:
+ *     summary: Activate/Deactivate user (ADMIN only)
+ */
+router.put('/:id/status', authorize('ADMIN'), toggleUserStatus);
+
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   delete:
+ *     summary: Soft delete user (ADMIN only)
+ */
+router.delete('/:id', authorize('ADMIN'), deleteUser);
 
 module.exports = router;

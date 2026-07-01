@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { protect, authorize } = require("../middleware/auth");
 const {
   createNotification,
   getNotifications,
@@ -7,192 +8,33 @@ const {
   markAsRead,
   markAsReadAll,
 } = require("../controllers/notifcationController");
-const { authorize } = require("../middleware/auth");
+
+// Protect all routes
+router.use(protect);
 
 /**
- * @swagger
- * components:
- *   schemas:
- *     Notification:
- *       type: object
- *       properties:
- *         _id:
- *           type: string
- *         userId:
- *           type: string
- *         title:
- *           type: string
- *         content:
- *           type: string
- *         type:
- *           type: string
- *           enum: [INFO, WARNING, ERROR]
- *         isRead:
- *           type: boolean
- *           default: false
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
+ * Get all notifications for a user (ADMIN có thể xem của user khác)
  */
+router.get("/:userId", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'), getNotifications);
 
 /**
- * @swagger
- * /api/notifications/{userId}:
- *   get:
- *     tags: [Notifications]
- *     summary: Get all notifications for a user
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *     responses:
- *       200:
- *         description: List of notifications
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Notification'
- *       400:
- *         description: User ID is required
- *       500:
- *         description: Server error
+ * Get unread notifications
  */
-router.get("/:userId", getNotifications);
+router.get("/:userId/unread", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'), getUnreadNotifications);
 
 /**
- * @swagger
- * /api/notifications/{userId}/unread:
- *   get:
- *     tags: [Notifications]
- *     summary: Get unread notifications for a user
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *     responses:
- *       200:
- *         description: List of unread notifications
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Notification'
- *       400:
- *         description: User ID is required
- *       500:
- *         description: Server error
+ * Mark all as read
  */
-router.get("/:userId/unread", getUnreadNotifications);
+router.patch("/:userId/read-all", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'), markAsReadAll);
 
 /**
- * @swagger
- * /api/notifications/{userId}/mark-all:
- *   put:
- *     tags: [Notifications]
- *     summary: Mark all notifications as read for a user
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *     responses:
- *       200:
- *         description: Notifications marked as read
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Notification'
- *       500:
- *         description: Server error
+ * Mark single notification as read
  */
-router.patch("/:userId/read-all", markAsReadAll);
+router.patch("/:id/read", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'), markAsRead);
 
 /**
- * @swagger
- * /api/notifications/{id}/mark:
- *   put:
- *     tags: [Notifications]
- *     summary: Mark a single notification as read
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Notification ID
- *     responses:
- *       200:
- *         description: Notification marked as read
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Notification'
- *       500:
- *         description: Server error
+ * Create notification (ADMIN + EDITOR + BOARD_MEMBER)
  */
-router.patch("/:id/read", markAsRead);
-
-/**
- * @swagger
- * /api/notifications:
- *   post:
- *     tags: [Notifications]
- *     summary: Create a new notification (EDITOR, BOARD_MEMBER only)
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - userId
- *               - title
- *               - content
- *               - type
- *             properties:
- *               userId:
- *                 type: string
- *               title:
- *                 type: string
- *               content:
- *                 type: string
- *               type:
- *                 type: string
- *                 enum: [INFO, WARNING, ERROR]
- *     responses:
- *       201:
- *         description: Notification created
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Notification'
- *       500:
- *         description: Server error
- */
-router.post("/", authorize("EDITOR", "BOARD_MEMBER"), createNotification);
+router.post("/", authorize("ADMIN", "EDITOR", "BOARD_MEMBER"), createNotification);
 
 module.exports = router;

@@ -10,122 +10,32 @@ const {
   rejectProposal,
 } = require('../controllers/proposalController');
 
-// All routes here require protection
+// Protect all routes
 router.use(protect);
 
 /**
- * @swagger
- * /api/series/proposal:
- *   post:
- *     summary: Submit a new series proposal with storyboard (MANGAKA only)
- *     tags: [Proposals]
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required:
- *               - title
- *               - genre
- *               - synopsis
- *               - storyboard
- *             properties:
- *               title:
- *                 type: string
- *               genre:
- *                 type: string
- *               synopsis:
- *                 type: string
- *               storyboard:
- *                 type: string
- *                 format: binary
- *     responses:
- *       201:
- *         description: Proposal created
- *       403:
- *         description: Forbidden - Only MANGAKA
+ * Mangaka tạo proposal
  */
 router.post('/', authorize('MANGAKA'), upload.single('storyboard'), createProposal);
 
 /**
- * @swagger
- * /api/series/proposal:
- *   get:
- *     summary: Get pending proposals (EDITOR only)
- *     tags: [Proposals]
- *     security:
- *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: Return list of proposals
+ * Xem danh sách proposal (ADMIN + EDITOR)
  */
-router.get('/', authorize('EDITOR'), getProposals);
+router.get('/', authorize('ADMIN', 'EDITOR'), getProposals);
 
 /**
- * @swagger
- * /api/series/proposal/{id}/storyboard:
- *   get:
- *     summary: Download storyboard file for a proposal (EDITOR only)
- *     tags: [Proposals]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Binary file stream
+ * Download storyboard
  */
-router.get('/:id/storyboard', authorize('EDITOR'), downloadStoryboard);
+router.get('/:id/storyboard', authorize('ADMIN', 'EDITOR'), downloadStoryboard);
 
 /**
- * @swagger
- * /api/series/proposal/{id}/forward:
- *   put:
- *     summary: Forward proposal to the Board (EDITOR only)
- *     tags: [Proposals]
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               comment:
- *                 type: string
- *     responses:
- *       200:
- *         description: Proposal forwarded successfully
+ * Forward proposal to Board
  */
-router.put('/:id/forward', authorize('EDITOR'), forwardProposal);
+router.put('/:id/forward', authorize('ADMIN', 'EDITOR'), forwardProposal);
 
 /**
- * @swagger
- * /api/series/proposal/{id}/reject:
- *   put:
- *     summary: Reject/request feedback for a proposal (EDITOR only)
- *     tags: [Proposals]
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               comment:
- *                 type: string
- *     responses:
- *       200:
- *         description: Proposal status updated to REJECTED
+ * Reject proposal
  */
-router.put('/:id/reject', authorize('EDITOR'), rejectProposal);
+router.put('/:id/reject', authorize('ADMIN', 'EDITOR'), rejectProposal);
 
 module.exports = router;
