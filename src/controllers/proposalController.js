@@ -2,9 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const SeriesProposal = require('../models/SeriesProposal');
 const { logAction } = require('../utils/auditLogger');
-const fs = require("fs");
-const path = require("path");
-const SeriesProposal = require("../models/SeriesProposal");
 
 
 // @desc    Submit proposal + storyboard file upload
