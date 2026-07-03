@@ -20,7 +20,7 @@ router.post('/', authorize('MANGAKA'), createSeries);
 /**
  * Lấy danh sách series (ADMIN, EDITOR, MANGAKA)
  */
-router.get('/', authorize('ADMIN', 'EDITOR', 'MANGAKA'), getAllSeries);
+router.get('/', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'BOARD_MEMBER'), getAllSeries);
 
 /**
  * Lấy chi tiết series
