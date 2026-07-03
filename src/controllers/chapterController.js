@@ -65,7 +65,6 @@ exports.createChapter = async (req, res) => {
 exports.getChapterBySeriesId = async (seriesId) => {
   return await Chapter.find({ seriesId }).sort({ createdAt: 1 });
 };
-
 // UPDATE CHAPTER
 exports.updateChapter = async (req, res) => {
   try {

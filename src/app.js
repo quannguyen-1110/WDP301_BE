@@ -23,6 +23,7 @@ const userRoutes = require('./routes/users.js');
 const proposalRoutes = require('./routes/proposal.js');
 const notificationRoutes = require('./routes/notification.js');
 const defenseReportRoutes = require('./routes/defenseReport.js');
+const auditLogRoutes = require('./routes/auditLog.js');
 
 const { protect, authorize } = require('./middleware/auth.js');
 
@@ -63,6 +64,7 @@ const setupApp = (io) => {
   app.use('/api/defense-reports', protect, defenseReportRoutes);
   app.use('/api/rankings', rankingsRoutes);
   app.use('/api/notifications', protect, notificationRoutes);
+  app.use('/api/audit-logs', protect, auditLogRoutes);
 
   // FILE MANAGEMENT
   app.use('/api/files', protect, fileRoutes);
