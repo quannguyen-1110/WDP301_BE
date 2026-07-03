@@ -2,9 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const SeriesProposal = require('../models/SeriesProposal');
 const { logAction } = require('../utils/auditLogger');
-const fs = require("fs");
-const path = require("path");
-const SeriesProposal = require("../models/SeriesProposal");
 
 
 // @desc    Submit proposal + storyboard file upload
@@ -500,6 +497,47 @@ exports.approveProposal = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Proposal approved by Editorial Board",
+      data: proposal,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Resubmit proposal after revision
+// @route   PUT /api/series/proposal/:id/resubmit
+// @access  MANGAKA only
+exports.resubmitProposal = async (req, res) => {
+  try {
+    const proposal = await SeriesProposal.findById(req.params.id);
+
+    if (!proposal) {
+      return res.status(404).json({
+        success: false,
+        message: "Proposal not found",
+      });
+    }
+
+    proposal.status = "UNDER_REVIEW";
+
+    const comment = {
+      authorId: req.user._id,
+      authorName: req.user.name,
+      authorRole: "mangaka",
+      content: "Proposal resubmitted after revision.",
+      isInternal: false,
+      createdAt: new Date(),
+    };
+    proposal.comments.push(comment);
+
+    await proposal.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Proposal resubmitted successfully",
       data: proposal,
     });
   } catch (error) {

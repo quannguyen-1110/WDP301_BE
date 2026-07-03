@@ -61,14 +61,10 @@ exports.createChapter = async (req, res) => {
   }
 };
 
-<<<<<<< HEAD
-=======
 // GET CHAPTERS BY SERIES
 exports.getChapterBySeriesId = async (seriesId) => {
   return await Chapter.find({ seriesId }).sort({ createdAt: 1 });
 };
-
->>>>>>> c506602629ed2fe3ec9896424dd06e08788baab4
 // UPDATE CHAPTER
 exports.updateChapter = async (req, res) => {
   try {
