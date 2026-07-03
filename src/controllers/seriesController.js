@@ -153,9 +153,6 @@ exports.reviewSeries = async (req, res) => {
 exports.updateSeriesStatus = async (req, res) => {
   try {
     const { status } = req.body;
-<<<<<<< HEAD
-    const validTransitions = { /* giữ nguyên */ };
-=======
     const validTransitions = {
       PENDING: ['APPROVED', 'REJECTED'],
       APPROVED: ['IN_PRODUCTION', 'CANCELLED'],
@@ -167,7 +164,6 @@ exports.updateSeriesStatus = async (req, res) => {
       ON_HIATUS: ['IN_PRODUCTION', 'PENDING', 'REJECTED'],
       COMPLETED: ['IN_PRODUCTION', 'PENDING', 'REJECTED'],
     };
->>>>>>> c506602629ed2fe3ec9896424dd06e08788baab4
 
     const series = await Series.findById(req.params.id);
     if (!series) {
