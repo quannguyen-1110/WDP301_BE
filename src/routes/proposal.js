@@ -12,7 +12,6 @@ const {
   forwardProposal,
   rejectProposal,
   resubmitProposal,
-  sendToBoard,
   approveProposal,
 } = require('../controllers/proposalController');
 
@@ -172,20 +171,6 @@ router.put('/:id/reject', authorize('EDITOR', 'BOARD_MEMBER'), rejectProposal);
  *         description: Proposal resubmitted
  */
 router.put('/:id/resubmit', authorize('MANGAKA'), resubmitProposal);
-
-/**
- * @swagger
- * /api/series/proposal/{id}/send-to-board:
- *   put:
- *     summary: Send approved proposal to Editorial Board (EDITOR only)
- *     tags: [Proposals]
- *     security:
- *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: Proposal sent to board
- */
-router.put('/:id/send-to-board', authorize('EDITOR'), sendToBoard);
 
 /**
  * @swagger

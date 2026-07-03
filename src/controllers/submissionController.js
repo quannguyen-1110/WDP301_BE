@@ -5,7 +5,6 @@ const User = require("../models/User.js");
 exports.createSubmission = async (req, res) => {
   try {
     const submission = await Submission.create(req.body);
-    req.io.emit("submission_submitted", submission);
     res.status(201).json({
       success: true,
       data: submission,
@@ -18,12 +17,46 @@ exports.createSubmission = async (req, res) => {
   }
 };
 
-exports.getAllSubmissions = async (req, res) => {
+exports.getAllSubmissionsBySeriesId = async (req, res) => {
   try {
-    const submissions = await Submission.find();
+    const { seriesId } = req.params;
+    let query = Submission.find({ seriesId });
+
+    const submissions = await query.populate({
+      path: 'proposalId',
+      populate: { path: 'mangakaId', select: 'name email' }
+    });
+
     res.status(200).json({
       success: true,
       data: submissions,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.getAllSubmissionsByProposal = async (req, res) => {
+  try {
+    const { proposalStatus } = req.query;
+    let query = Submission.find({});
+
+    const submissions = await query.populate({
+      path: 'proposalId',
+      populate: { path: 'mangakaId', select: 'name email' }
+    });
+
+    let result = submissions;
+    if (proposalStatus) {
+      result = submissions.filter((s) => s.proposalId?.status === proposalStatus);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result,
     });
   } catch (error) {
     res.status(500).json({
@@ -76,23 +109,6 @@ exports.getSubmissionById = async (req, res) => {
     res.status(200).json({
       success: true,
       data: submission,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-exports.getSubmissionsBySeriesId = async (req, res) => {
-  try {
-    const submissions = await Submission.find({
-      seriesId: req.params.seriesId,
-    });
-    res.status(200).json({
-      success: true,
-      data: submissions,
     });
   } catch (error) {
     res.status(500).json({

@@ -3,8 +3,6 @@ const router = express.Router();
 const { protect, authorize } = require("../middleware/auth.js");
 
 const {
-  getSubmissionsBySeriesId,
-  getAllSubmissions,
   createSubmission,
   updateSubmission,
   deleteSubmission,
@@ -12,6 +10,8 @@ const {
   getVotesBySubmissionId,
   assignVoters,
   getVotingStatus,
+  getAllSubmissionsByProposal,
+  getAllSubmissionsBySeriesId,
 } = require('../controllers/submissionController.js');
 
 // Protect all routes
@@ -23,14 +23,14 @@ router.use(protect);
 router.post('/', authorize('ADMIN', 'MANGAKA'), createSubmission);
 
 /**
- * Get all submissions (ADMIN + BOARD)
+ * Get all submissions by Proposal status(ADMIN + BOARD)
  */
-router.get('/all', authorize('ADMIN', 'BOARD_MEMBER'), getAllSubmissions);
+router.get('/all', authorize('ADMIN', 'BOARD_MEMBER', 'EDITOR'), getAllSubmissionsByProposal);
 
 /**
- * Get submissions by series
+ * Get all submissions by series ID
  */
-router.get('/series/:seriesId', authorize('ADMIN', 'BOARD_MEMBER', 'MANGAKA'), getSubmissionsBySeriesId);
+router.get('/series/:seriesId', authorize('ADMIN', 'BOARD_MEMBER', 'EDITOR'), getAllSubmissionsBySeriesId);
 
 /**
  * Assign voters

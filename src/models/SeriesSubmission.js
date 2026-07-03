@@ -29,7 +29,12 @@ const seriesSubmissionSchema = new mongoose.Schema(
     seriesId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Series',
-      required: true,
+      default: null
+    },
+    proposalId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SeriesProposal',
+      default: null,
     },
     submissionType: {
       type: String,
@@ -44,13 +49,10 @@ const seriesSubmissionSchema = new mongoose.Schema(
     action: {
       type: String,
       enum: ACTION_TYPE,
-      required: true,
     },
     decisionStatus: {
       type: String,
       enum: DECISION_STATUS,
-      required: true,
-      default: 'PENDING',
     },
     requiredVoters: {
       type: [requiredVoterSchema],

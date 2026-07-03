@@ -1,10 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const SeriesProposal = require('../models/SeriesProposal');
+const Submission = require('../models/SeriesSubmission');
+const Series = require('../models/Series');
 const { logAction } = require('../utils/auditLogger');
-const fs = require("fs");
-const path = require("path");
-const SeriesProposal = require("../models/SeriesProposal");
 
 
 // @desc    Submit proposal + storyboard file upload
@@ -168,8 +167,6 @@ exports.downloadStoryboard = async (req, res) => {
 };
 
 
-// @desc    Editor forward proposal to Board
-
 // @desc    Add a review comment to a proposal
 // @route   PUT /api/series/proposal/:id/comment
 // @access  EDITOR only
@@ -285,8 +282,9 @@ exports.forwardProposal = async (req, res) => {
 
     proposal.status = "APPROVED_BY_TANTOU";
 
+    let commentData = null;
     if (content) {
-      const comment = {
+      commentData = {
         authorId: req.user._id,
         authorName: req.user.name,
         authorRole: "editor",
@@ -294,17 +292,27 @@ exports.forwardProposal = async (req, res) => {
         isInternal: false,
         createdAt: new Date(),
       };
-      proposal.comments.push(comment);
+      proposal.comments.push(commentData);
     }
 
     await proposal.save();
+
+    await Submission.create({
+      proposalId: proposal._id,
+      title: proposal.title,
+      description: proposal.description,
+      submittedBy: req.user._id,
+      submissionType: "PITCH",
+      status: "PENDING",
+      requiredVoters: [],
+    });
 
     await logAction(
       req.user._id,
       req.user.name || 'Unknown User',
       "Forwarded Proposal to Board",
       `Proposal: ${proposal.title}`,
-      comment ? `Comment: ${comment}` : ''
+      commentData ? `Comment: ${commentData.content}` : ''
     );
 
     res.status(200).json({
@@ -380,7 +388,7 @@ exports.rejectProposal = async (req, res) => {
 // @desc    Mangaka resubmit proposal after revision
 // @route   PUT /api/series/proposal/:id/resubmit
 // @access  MANGAKA only
-const resubmitProposal = async (req, res) => {
+exports.resubmitProposal = async (req, res) => {
   try {
     const proposal = await SeriesProposal.findById(req.params.id);
 
@@ -425,43 +433,6 @@ const resubmitProposal = async (req, res) => {
   }
 };
 
-// @desc    Board sends proposal to editorial board (after tantou approval)
-// @route   PUT /api/series/proposal/:id/send-to-board
-// @access  EDITOR only
-exports.sendToBoard = async (req, res) => {
-  try {
-    const proposal = await SeriesProposal.findById(req.params.id);
-
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: "Proposal not found",
-      });
-    }
-
-    if (proposal.status !== "APPROVED_BY_TANTOU") {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot send to board. Current status: ${proposal.status}`,
-      });
-    }
-
-    proposal.status = "SENT_TO_EDITORIAL_BOARD";
-    await proposal.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Proposal sent to Editorial Board",
-      data: proposal,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
 // @desc    Board approves proposal
 // @route   PUT /api/series/proposal/:id/approve
 // @access  BOARD only
@@ -476,7 +447,7 @@ exports.approveProposal = async (req, res) => {
       });
     }
 
-    if (proposal.status !== "SENT_TO_EDITORIAL_BOARD") {
+    if (proposal.status !== "APPROVED_BY_TANTOU") {
       return res.status(400).json({
         success: false,
         message: `Cannot approve. Current status: ${proposal.status}`,
