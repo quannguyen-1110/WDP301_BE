@@ -2,6 +2,7 @@ const Task = require('../models/Task.js');
 const Page = require('../models/Page.js');
 const User = require('../models/User.js');
 const AssistantEarning = require('../models/AssistantEarning.js');
+const { logAction } = require('../utils/auditLogger');
 
 exports.createTask = async (req, res) => {
   try {
@@ -45,6 +46,15 @@ exports.createTask = async (req, res) => {
         { status: 'HAS_TASK' }
       );
     }
+
+    // ==================== AUDIT LOG ====================
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      "Assigned New Task",
+      `Task: ${title}`,
+      `Series: ${seriesId}, Chapter: ${chapterId}, Assistant: ${assignedTo}, Pages: ${pageIds?.length || 0}`
+    );
 
     // Realtime Socket
     if (req.io) {
@@ -92,6 +102,15 @@ exports.submitTask = async (req, res) => {
       {
         status: 'COMPLETED',
       }
+    );
+
+    // ==================== AUDIT LOG ====================
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      "Submitted Task",
+      `Task ID: ${req.params.id}`,
+      `Series: ${task.seriesId}, Chapter: ${task.chapterId}`
     );
 
     if (req.io) {
@@ -156,8 +175,7 @@ exports.reviewTask = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message:
-          "Action must be 'APPROVE', 'REJECT', or 'REVISION_REQUESTED'",
+        message: "Action must be 'APPROVE', 'REJECT', or 'REVISION_REQUESTED'",
       });
     }
 
@@ -173,38 +191,29 @@ exports.reviewTask = async (req, res) => {
     if (action === 'APPROVE') {
       task.status = 'APPROVED';
       task.reviewedAt = new Date();
-      task.reviewNote =
-        reviewNote || 'Approved by author';
+      task.reviewNote = reviewNote || 'Approved by author';
 
       await task.save();
 
       await Page.updateMany(
-        {
-          _id: { $in: task.pageIds },
-        },
+        { _id: { $in: task.pageIds } },
         {
           status: 'APPROVED',
-          reviewNote:
-            reviewNote || 'Approved by author',
+          reviewNote: reviewNote || 'Approved by author',
           approvedAt: new Date(),
         }
       );
 
-      // Assistant earning
+      // Assistant earning logic (giữ nguyên)
       const pagesCount = task.pageIds.length;
-
       if (pagesCount > 0) {
         const now = new Date();
+        const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-        const monthStr = `${now.getFullYear()}-${String(
-          now.getMonth() + 1
-        ).padStart(2, '0')}`;
-
-        let earning =
-          await AssistantEarning.findOne({
-            assistantId: task.assignedTo,
-            month: monthStr,
-          });
+        let earning = await AssistantEarning.findOne({
+          assistantId: task.assignedTo,
+          month: monthStr,
+        });
 
         if (!earning) {
           earning = new AssistantEarning({
@@ -217,39 +226,35 @@ exports.reviewTask = async (req, res) => {
           });
         }
 
-        const existingApprovedPageIds =
-          earning.approvedPages.map((ap) =>
-            ap.pageId.toString()
-          );
-
+        const existingApprovedPageIds = earning.approvedPages.map(ap => ap.pageId.toString());
         let addedPagesCount = 0;
 
         for (const pageId of task.pageIds) {
-          if (
-            !existingApprovedPageIds.includes(
-              pageId.toString()
-            )
-          ) {
+          if (!existingApprovedPageIds.includes(pageId.toString())) {
             earning.approvedPages.push({
               pageId,
               chapterId: task.chapterId,
               seriesId: task.seriesId,
               approvedAt: new Date(),
             });
-
             addedPagesCount++;
           }
         }
 
-        earning.totalPagesApproved +=
-          addedPagesCount;
-
-        earning.totalEarning =
-          earning.totalPagesApproved *
-          earning.ratePerPage;
+        earning.totalPagesApproved += addedPagesCount;
+        earning.totalEarning = earning.totalPagesApproved * earning.ratePerPage;
 
         await earning.save();
       }
+
+      // ==================== AUDIT LOG ====================
+      await logAction(
+        req.user._id,
+        req.user.name || 'Unknown',
+        "Approved Task",
+        `Task: ${task.title}`,
+        `Pages approved: ${task.pageIds.length}, Review: ${reviewNote || 'No note'}`
+      );
 
       if (req.io) {
         req.io.emit('task_approved', task);
@@ -257,9 +262,7 @@ exports.reviewTask = async (req, res) => {
     } else {
       task.status = 'REVISION_REQUESTED';
       task.reviewedAt = new Date();
-      task.reviewNote =
-        reviewNote ||
-        'Revision requested by author';
+      task.reviewNote = reviewNote || 'Revision requested by author';
 
       await task.save();
 
@@ -270,27 +273,27 @@ exports.reviewTask = async (req, res) => {
         },
         {
           status: 'REVISION_REQUESTED',
-          reviewNote:
-            reviewNote ||
-            'Revision requested by author',
+          reviewNote: reviewNote || 'Revision requested by author',
         }
       );
 
+      // ==================== AUDIT LOG ====================
+      await logAction(
+        req.user._id,
+        req.user.name || 'Unknown',
+        "Requested Task Revision",
+        `Task: ${task.title}`,
+        `Reason: ${reviewNote || 'No note provided'}`
+      );
+
       if (req.io) {
-        req.io.emit(
-          'task_revision_requested',
-          task
-        );
+        req.io.emit('task_revision_requested', task);
       }
     }
 
     res.status(200).json({
       success: true,
-      message: `Task has been ${
-        action === 'APPROVE'
-          ? 'approved'
-          : 'returned for revision'
-      } successfully`,
+      message: `Task has been ${action === 'APPROVE' ? 'approved' : 'returned for revision'} successfully`,
       data: task,
     });
   } catch (error) {

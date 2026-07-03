@@ -1,5 +1,6 @@
 const File = require("../models/File");
 const path = require("path");
+const { logAction } = require('../utils/auditLogger');
 
 exports.uploadFile = async (req, res) => {
   try {
@@ -21,6 +22,15 @@ exports.uploadFile = async (req, res) => {
       chapterId: req.body.chapterId || null,
     });
 
+    // ==================== AUDIT LOG ====================
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      "Uploaded File",
+      `File: ${req.file.originalname}`,
+      `Chapter ID: ${req.body.chapterId || 'N/A'}`
+    );
+
     if (req.io) {
       req.io.emit("file_uploaded", {
         fileName: newFile.originalName,
@@ -41,9 +51,24 @@ exports.uploadFile = async (req, res) => {
   }
 };
 
+exports.getAllFiles = async (req, res) => {
+  try {
+    const files = await File.find()
+      .populate("uploadedBy", "name email role")
+      .populate("chapterId");
+
+    res.status(200).json({
+      success: true,
+      count: files.length,
+      data: files,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.getFile = async (req, res) => {
   try {
-
     const file = await File.findById(req.params.id)
       .populate("uploadedBy", "name email role")
       .populate("chapterId");
@@ -59,18 +84,13 @@ exports.getFile = async (req, res) => {
       success: true,
       data: file,
     });
-
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.downloadFile = async (req, res) => {
   try {
-
     const file = await File.findById(req.params.id);
 
     if (!file) {
@@ -81,32 +101,7 @@ exports.downloadFile = async (req, res) => {
     }
 
     res.download(path.resolve(file.fileUrl));
-
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-exports.getAllFiles = async (req, res) => {
-  try {
-
-    const files = await File.find()
-      .populate("uploadedBy", "name email role")
-      .populate("chapterId");
-
-    res.status(200).json({
-      success: true,
-      count: files.length,
-      data: files,
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

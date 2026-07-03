@@ -7,13 +7,15 @@ const {
   getUnreadNotifications,
   markAsRead,
   markAsReadAll,
+  getAllNotifications,     // ← Mới
+  deleteNotification       // ← Mới
 } = require("../controllers/notifcationController");
 
 // Protect all routes
 router.use(protect);
 
 /**
- * Get all notifications for a user (ADMIN có thể xem của user khác)
+ * Get all notifications for a user
  */
 router.get("/:userId", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'), getNotifications);
 
@@ -33,7 +35,19 @@ router.patch("/:userId/read-all", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'ED
 router.patch("/:id/read", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'), markAsRead);
 
 /**
- * Create notification (ADMIN + EDITOR + BOARD_MEMBER)
+ * === ADMIN ONLY ===
+ * Get ALL notifications in system
+ */
+router.get('/', authorize('ADMIN'), getAllNotifications);
+
+/**
+ * === ADMIN ONLY ===
+ * Delete a notification
+ */
+router.delete('/:id', authorize('ADMIN'), deleteNotification);
+
+/**
+ * Create notification
  */
 router.post("/", authorize("ADMIN", "EDITOR", "BOARD_MEMBER"), createNotification);
 

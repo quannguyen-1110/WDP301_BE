@@ -1,10 +1,9 @@
 const mongoose = require('mongoose');
 const Annotation = require('../models/Annotation.js');
 const Page = require('../models/Page.js');
+const { logAction } = require('../utils/auditLogger');
 
 // @desc    Create a new annotation on a page
-// @route   POST /api/annotations
-// @access  EDITOR, MANGAKA
 exports.createAnnotation = async (req, res) => {
   try {
     const { pageId, coords, content, type } = req.body;
@@ -23,7 +22,6 @@ exports.createAnnotation = async (req, res) => {
       });
     }
 
-    // Verify page exists
     const page = await Page.findById(pageId);
     if (!page) {
       return res.status(404).json({
@@ -40,10 +38,17 @@ exports.createAnnotation = async (req, res) => {
       type,
     });
 
-    // Populate annotator info
     await annotation.populate('annotatorId', 'name email role');
 
-    // Notify via socket
+    // ==================== AUDIT LOG ====================
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      "Created Annotation",
+      `Page ID: ${pageId}`,
+      `Type: ${type} - ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`
+    );
+
     if (req.io) {
       req.io.emit('annotation_created', annotation);
     }
@@ -61,8 +66,6 @@ exports.createAnnotation = async (req, res) => {
 };
 
 // @desc    Get all annotations for a specific page
-// @route   GET /api/annotations/page/:pageId
-// @access  EDITOR, MANGAKA, ASSISTANT
 exports.getAnnotationsByPage = async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.pageId)) {
@@ -91,8 +94,6 @@ exports.getAnnotationsByPage = async (req, res) => {
 };
 
 // @desc    Update an annotation
-// @route   PUT /api/annotations/:id
-// @access  EDITOR, MANGAKA
 exports.updateAnnotation = async (req, res) => {
   try {
     const { coords, content, type } = req.body;
@@ -105,7 +106,6 @@ exports.updateAnnotation = async (req, res) => {
       });
     }
 
-    // Ensure they are the annotator or an Editor
     if (annotation.annotatorId.toString() !== req.user._id.toString() && req.user.role !== 'EDITOR') {
       return res.status(403).json({
         success: false,
@@ -113,13 +113,20 @@ exports.updateAnnotation = async (req, res) => {
       });
     }
 
-    // Update fields
     if (coords) annotation.coords = coords;
     if (content) annotation.content = content;
     if (type) annotation.type = type;
 
     await annotation.save();
     await annotation.populate('annotatorId', 'name email role');
+
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      "Updated Annotation",
+      `Annotation ID: ${req.params.id}`,
+      `Page ID: ${annotation.pageId}`
+    );
 
     if (req.io) {
       req.io.emit('annotation_updated', annotation);
@@ -138,8 +145,6 @@ exports.updateAnnotation = async (req, res) => {
 };
 
 // @desc    Delete an annotation
-// @route   DELETE /api/annotations/:id
-// @access  EDITOR, MANGAKA
 exports.deleteAnnotation = async (req, res) => {
   try {
     const annotation = await Annotation.findById(req.params.id);
@@ -150,7 +155,6 @@ exports.deleteAnnotation = async (req, res) => {
       });
     }
 
-    // Ensure they are the annotator or an Editor
     if (annotation.annotatorId.toString() !== req.user._id.toString() && req.user.role !== 'EDITOR') {
       return res.status(403).json({
         success: false,
@@ -159,6 +163,14 @@ exports.deleteAnnotation = async (req, res) => {
     }
 
     await annotation.deleteOne();
+
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      "Deleted Annotation",
+      `Annotation ID: ${req.params.id}`,
+      `Page ID: ${annotation.pageId}`
+    );
 
     if (req.io) {
       req.io.emit('annotation_deleted', { id: req.params.id, pageId: annotation.pageId });

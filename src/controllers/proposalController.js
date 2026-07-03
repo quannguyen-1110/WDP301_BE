@@ -1,10 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const SeriesProposal = require('../models/SeriesProposal');
+const { logAction } = require('../utils/auditLogger');
 
 // @desc    Submit proposal + storyboard file upload
 // @route   POST /api/series/proposal
-// @access  MANGAKA only
 exports.createProposal = async (req, res) => {
   try {
     const { title, genre, synopsis } = req.body;
@@ -20,7 +20,6 @@ exports.createProposal = async (req, res) => {
     const allowedExtensions = ['.zip', '.pdf', '.png', '.psd', '.clip'];
 
     if (!allowedExtensions.includes(fileExt)) {
-      // Delete uploaded file if extension is invalid
       if (fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
@@ -30,7 +29,6 @@ exports.createProposal = async (req, res) => {
       });
     }
 
-    // Prepare storyboardUrl
     const storyboardUrl = `/api/series/proposal/file/${req.file.filename}`;
 
     const proposal = await SeriesProposal.create({
@@ -43,6 +41,15 @@ exports.createProposal = async (req, res) => {
       mangakaId: req.user._id,
       status: 'PENDING',
     });
+
+    // Ghi Audit Log
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown User',
+      "Created Series Proposal",
+      `Title: ${title}`,
+      `Genre: ${genre}`
+    );
 
     res.status(201).json({
       success: true,
@@ -57,7 +64,6 @@ exports.createProposal = async (req, res) => {
       },
     });
   } catch (error) {
-    // Cleanup file if error occurs
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
@@ -69,8 +75,6 @@ exports.createProposal = async (req, res) => {
 };
 
 // @desc    Get list of proposals pending review
-// @route   GET /api/series/proposal
-// @access  EDITOR only
 exports.getProposals = async (req, res) => {
   try {
     const proposals = await SeriesProposal.find({ status: 'PENDING' })
@@ -91,8 +95,6 @@ exports.getProposals = async (req, res) => {
 };
 
 // @desc    Download storyboard file
-// @route   GET /api/series/proposal/:id/storyboard
-// @access  EDITOR only
 exports.downloadStoryboard = async (req, res) => {
   try {
     const proposal = await SeriesProposal.findById(req.params.id);
@@ -121,8 +123,6 @@ exports.downloadStoryboard = async (req, res) => {
 };
 
 // @desc    Editor forward proposal to Board
-// @route   PUT /api/series/proposal/:id/forward
-// @access  EDITOR only
 exports.forwardProposal = async (req, res) => {
   try {
     const { comment } = req.body;
@@ -140,6 +140,14 @@ exports.forwardProposal = async (req, res) => {
     proposal.comment = comment || '';
     await proposal.save();
 
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown User',
+      "Forwarded Proposal to Board",
+      `Proposal: ${proposal.title}`,
+      comment ? `Comment: ${comment}` : ''
+    );
+
     res.status(200).json({
       success: true,
       message: 'Proposal successfully forwarded to the Board',
@@ -154,8 +162,6 @@ exports.forwardProposal = async (req, res) => {
 };
 
 // @desc    Editor reject / request changes for proposal
-// @route   PUT /api/series/proposal/:id/reject
-// @access  EDITOR only
 exports.rejectProposal = async (req, res) => {
   try {
     const { comment } = req.body;
@@ -173,6 +179,14 @@ exports.rejectProposal = async (req, res) => {
     proposal.comment = comment || '';
     await proposal.save();
 
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown User',
+      "Rejected Proposal",
+      `Proposal: ${proposal.title}`,
+      comment || ''
+    );
+
     res.status(200).json({
       success: true,
       message: 'Proposal successfully rejected / feedback sent',
@@ -184,4 +198,12 @@ exports.rejectProposal = async (req, res) => {
       message: error.message,
     });
   }
+};
+
+module.exports = {
+  createProposal,
+  getProposals,
+  downloadStoryboard,
+  forwardProposal,
+  rejectProposal,
 };

@@ -1,4 +1,5 @@
 const Chapter = require("../models/Chapter.js");
+const { logAction } = require('../utils/auditLogger');
 
 const CHAPTER_STATUS = {
   IN_PROGRESS: "IN_PROGRESS",
@@ -10,10 +11,7 @@ exports.getAllChapters = async (req, res) => {
     const { seriesId } = req.query;
 
     const filter = {};
-
-    if (seriesId) {
-      filter.seriesId = seriesId;
-    }
+    if (seriesId) filter.seriesId = seriesId;
 
     const chapters = await Chapter.find(filter)
       .populate("seriesId", "title")
@@ -25,31 +23,29 @@ exports.getAllChapters = async (req, res) => {
       data: chapters,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 // CREATE CHAPTER
 exports.createChapter = async (req, res) => {
   try {
-    const { seriesId } = req.body;
+    const { seriesId, chapterNumber, title } = req.body;
 
-    if (!seriesId) {
-      return res.status(400).json({
-        success: false,
-        message: "seriesId is required",
-      });
-    }
-
-    // FE gửi deadline, BE lưu dueAt
     if (req.body.deadline) {
       req.body.dueAt = req.body.deadline;
     }
 
     const chapter = await Chapter.create(req.body);
+
+    // ==================== AUDIT LOG ====================
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      "Created Chapter",
+      `Chapter ${chapterNumber} - ${title || 'Untitled'}`,
+      `Series ID: ${seriesId}`
+    );
 
     if (req.io) {
       req.io.emit("chapter_created", chapter);
@@ -61,22 +57,13 @@ exports.createChapter = async (req, res) => {
       data: chapter,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
-};
-
-// GET CHAPTERS BY SERIES
-exports.getChapterBySeriesId = async (seriesId) => {
-  return await Chapter.find({ seriesId });
 };
 
 // UPDATE CHAPTER
 exports.updateChapter = async (req, res) => {
   try {
-    // FE gửi deadline, BE lưu dueAt
     if (req.body.deadline) {
       req.body.dueAt = req.body.deadline;
     }
@@ -84,18 +71,20 @@ exports.updateChapter = async (req, res) => {
     const chapter = await Chapter.findByIdAndUpdate(
       req.params.id,
       req.body,
-      {
-        new: true,
-        runValidators: true,
-      }
+      { new: true, runValidators: true }
     );
 
     if (!chapter) {
-      return res.status(404).json({
-        success: false,
-        message: "Chapter not found",
-      });
+      return res.status(404).json({ success: false, message: "Chapter not found" });
     }
+
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      "Updated Chapter",
+      `Chapter ID: ${req.params.id}`,
+      `New status: ${chapter.status}`
+    );
 
     if (req.io) {
       req.io.emit("chapter_updated", chapter);
@@ -107,10 +96,7 @@ exports.updateChapter = async (req, res) => {
       data: chapter,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -120,16 +106,19 @@ exports.deleteChapter = async (req, res) => {
     const chapter = await Chapter.findByIdAndDelete(req.params.id);
 
     if (!chapter) {
-      return res.status(404).json({
-        success: false,
-        message: "Chapter not found",
-      });
+      return res.status(404).json({ success: false, message: "Chapter not found" });
     }
 
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      "Deleted Chapter",
+      `Chapter ID: ${req.params.id}`,
+      `Series ID: ${chapter.seriesId}`
+    );
+
     if (req.io) {
-      req.io.emit("chapter_deleted", {
-        id: req.params.id,
-      });
+      req.io.emit("chapter_deleted", { id: req.params.id });
     }
 
     res.status(200).json({
@@ -138,10 +127,7 @@ exports.deleteChapter = async (req, res) => {
       data: chapter,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -154,17 +140,20 @@ exports.publishChapter = async (req, res) => {
         status: CHAPTER_STATUS.COMPLETED,
         publishedAt: new Date(),
       },
-      {
-        new: true,
-      }
+      { new: true }
     );
 
     if (!chapter) {
-      return res.status(404).json({
-        success: false,
-        message: "Chapter not found",
-      });
+      return res.status(404).json({ success: false, message: "Chapter not found" });
     }
+
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      "Published Chapter",
+      `Chapter ID: ${req.params.id}`,
+      `Series ID: ${chapter.seriesId}`
+    );
 
     if (req.io) {
       req.io.emit("chapter_published", chapter);
@@ -176,9 +165,6 @@ exports.publishChapter = async (req, res) => {
       data: chapter,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
