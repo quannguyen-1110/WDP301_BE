@@ -15,6 +15,7 @@ const {
   approveProposal,
 } = require('../controllers/proposalController');
 
+//Changed line
 // Protect all routes
 router.use(protect);
 
