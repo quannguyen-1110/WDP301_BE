@@ -16,6 +16,7 @@ const assistantRoutes = require('./routes/assistant.js');
 const annotationRoutes = require('./routes/annotation.js');
 const editorRoutes = require('./routes/editor.js');
 const rankingsRoutes = require('./routes/rankings.js');
+const auditLogRoutes = require('./routes/auditLog.js');
 
 // FILE ROUTES
 const fileRoutes = require('./routes/file.js');
@@ -63,6 +64,7 @@ const setupApp = (io) => {
   app.use('/api/defense-reports', protect, defenseReportRoutes);
   app.use('/api/rankings', rankingsRoutes);
   app.use('/api/notifications', protect, notificationRoutes);
+  app.use('/api/audit-logs', protect, auditLogRoutes);
 
   // FILE MANAGEMENT
   app.use('/api/files', protect, fileRoutes);
