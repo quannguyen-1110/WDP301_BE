@@ -20,7 +20,7 @@ exports.createProposal = async (req, res) => {
     }
 
     const fileExt = path.extname(req.file.originalname).toLowerCase();
-    const allowedExtensions = [".zip", ".pdf", ".png", ".psd", ".clip"];
+    const allowedExtensions = [".zip", ".pdf", ".png", ".jpg", ".jpeg", ".psd", ".clip"];
 
     if (!allowedExtensions.includes(fileExt)) {
       if (fs.existsSync(req.file.path)) {
@@ -297,15 +297,19 @@ exports.forwardProposal = async (req, res) => {
 
     await proposal.save();
 
-    await Submission.create({
-      proposalId: proposal._id,
-      title: proposal.title,
-      description: proposal.description,
-      submittedBy: req.user._id,
-      submissionType: "PITCH",
-      status: "PENDING",
-      requiredVoters: [],
-    });
+    await Submission.findOneAndUpdate(
+      { proposalId: proposal._id, submissionType: "PITCH" },
+      {
+        $setOnInsert: {
+          proposalId: proposal._id,
+          submittedBy: req.user._id,
+          submissionType: "PITCH",
+          decisionStatus: "PENDING",
+          requiredVoters: [],
+        },
+      },
+      { new: true, upsert: true, runValidators: true },
+    );
 
     await logAction(
       req.user._id,
@@ -349,9 +353,10 @@ exports.rejectProposal = async (req, res) => {
     }
 
     proposal.status = "REJECTED";
+    let commentData = null;
 
     if (content) {
-      const comment = {
+      commentData = {
         authorId: req.user._id,
         authorName: req.user.name,
         authorRole: "editor",
@@ -359,7 +364,7 @@ exports.rejectProposal = async (req, res) => {
         isInternal: false,
         createdAt: new Date(),
       };
-      proposal.comments.push(comment);
+      proposal.comments.push(commentData);
     }
 
     await proposal.save();
@@ -369,7 +374,7 @@ exports.rejectProposal = async (req, res) => {
       req.user.name || 'Unknown User',
       "Rejected Proposal",
       `Proposal: ${proposal.title}`,
-      comment || ''
+      commentData?.content || ''
     );
 
     res.status(200).json({
@@ -396,6 +401,13 @@ exports.resubmitProposal = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Proposal not found",
+      });
+    }
+
+    if (proposal.mangakaId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only resubmit your own proposal",
       });
     }
 
@@ -446,6 +458,30 @@ exports.approveProposal = async (req, res) => {
         message: "Proposal not found",
       });
     }
+
+    const approvedSubmission = await Submission.findOne({
+      proposalId: proposal._id,
+      submissionType: "PITCH",
+      decisionStatus: "APPROVED",
+    });
+    if (!approvedSubmission) {
+      return res.status(409).json({
+        success: false,
+        message: "Board approval must be completed through the assigned voting session",
+      });
+    }
+    const series = await Series.findOne({ proposalId: proposal._id });
+    if (!series) {
+      return res.status(409).json({
+        success: false,
+        message: "The approved submission has not provisioned its series yet",
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Proposal was approved through board voting",
+      data: proposal,
+    });
 
     if (proposal.status !== "APPROVED_BY_TANTOU") {
       return res.status(400).json({

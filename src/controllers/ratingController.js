@@ -1,6 +1,5 @@
 const Rating = require('../models/Rating.js');
-const SeriesRank = require('../models/SeriesRank.js');
-const mongoose = require('mongoose');
+const Ranking = require('../models/Ranking.js');
 
 const updateMonthlyRank = async (seriesId) => {
   const now = new Date();
@@ -10,21 +9,6 @@ const updateMonthlyRank = async (seriesId) => {
     now.getMonth() + 1,
     1
   );
-
-  // Calculate total voteCount for this series this month
-  const [currentSeriesAgg] = await Rating.aggregate([
-    {
-      $match: {
-        seriesId: new mongoose.Types.ObjectId(seriesId),
-        createdAt: { $gte: startOfMonth, $lt: startOfNextMonth },
-      },
-    },
-    { $group: { _id: null, totalVoteCount: { $sum: '$voteCount' } } },
-  ]);
-
-  if (!currentSeriesAgg) {
-    return; // No ratings this month for this series
-  }
 
   // Aggregate total voteCount per series for this month, sorted descending
   const seriesScores = await Rating.aggregate([
@@ -36,40 +20,55 @@ const updateMonthlyRank = async (seriesId) => {
     { $group: { _id: '$seriesId', totalVoteCount: { $sum: '$voteCount' } } },
     { $sort: { totalVoteCount: -1 } },
   ]);
-
-  // Find the rank (1-based) of the current series
-  const rankIndex = seriesScores.findIndex(
-    (s) => s._id.toString() === seriesId.toString()
-  );
-
-  if (rankIndex === -1) return;
-
-  const newRank = rankIndex + 1;
-
-  // Find existing rank entry for this series in the current month
-  const existingRank = await SeriesRank.findOne({
-    seriesId,
-    rankedOn: { $gte: startOfMonth, $lt: startOfNextMonth },
+  const rankedSeriesIds = seriesScores.map((score) => score._id);
+  await Ranking.deleteMany({
+    cycle: 'monthly',
+    cycleStart: startOfMonth,
+    seriesId: { $nin: rankedSeriesIds },
   });
 
-  if (existingRank) {
-    existingRank.prevRank = existingRank.rank;
-    existingRank.rank = newRank;
-    await existingRank.save();
-  } else {
-    await SeriesRank.create({
-      seriesId,
-      rank: newRank,
-      prevRank: null,
-      rankedOn: now,
+
+  for (let index = 0; index < seriesScores.length; index += 1) {
+    const score = seriesScores[index];
+    const newRank = index + 1;
+    const existingRank = await Ranking.findOne({
+      seriesId: score._id,
+      cycle: 'monthly',
+      cycleStart: startOfMonth,
     });
+    if (existingRank) {
+      const previousRank = existingRank.rank;
+      existingRank.prevRank = previousRank;
+      existingRank.rank = newRank;
+      existingRank.votes = score.totalVoteCount;
+      existingRank.trend = newRank < previousRank
+        ? 'up'
+        : newRank > previousRank
+          ? 'down'
+          : 'flat';
+      await existingRank.save();
+    } else {
+      await Ranking.create({
+        seriesId: score._id,
+        rank: newRank,
+        prevRank: null,
+        votes: score.totalVoteCount,
+        trend: 'flat',
+        cycle: 'monthly',
+        cycleStart: startOfMonth,
+        cycleEnd: startOfNextMonth,
+      });
+    }
   }
 };
 
 exports.submitRating = async (req, res) => {
   try {
-    const rating = await Rating.create(req.body);
-    req.io.emit('rating_created', rating); // realtime
+    const rating = await Rating.create({
+      ...req.body,
+      submittedBy: req.user._id,
+    });
+    if (req.io) req.io.emit('rating_created', rating);
 
     // Update monthly rank based on voteCount
     await updateMonthlyRank(rating.seriesId);
@@ -88,10 +87,14 @@ exports.submitRating = async (req, res) => {
 
 exports.updateRating = async (req, res) => {
   try {
-    const rating = await Rating.findByIdAndUpdate(req.params.id, req.body, {
+    const rating = await Rating.findByIdAndUpdate(req.params.ratingId, req.body, {
       new: true,
       runValidators: true,
     });
+    if (!rating) {
+      return res.status(404).json({ success: false, message: 'Rating not found' });
+    }
+    await updateMonthlyRank(rating.seriesId);
     res.status(200).json({
       success: true,
       data: rating,
@@ -106,7 +109,11 @@ exports.updateRating = async (req, res) => {
 
 exports.deleteRating = async (req, res) => {
   try {
-    const rating = await Rating.findByIdAndDelete(req.params.id);
+    const rating = await Rating.findByIdAndDelete(req.params.ratingId);
+    if (!rating) {
+      return res.status(404).json({ success: false, message: 'Rating not found' });
+    }
+    await updateMonthlyRank(rating.seriesId);
     res.status(200).json({
       success: true,
       data: rating,

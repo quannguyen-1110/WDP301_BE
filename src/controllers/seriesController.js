@@ -38,6 +38,9 @@ exports.getAllSeries = async (req, res) => {
   try {
     const { status, mangakaId } = req.query;
     const filter = {};
+    if (req.user.role === 'EDITOR') {
+      filter.editorId = req.user._id;
+    }
 
     if (status) filter.status = status;
     if (mangakaId) filter.mangakaId = mangakaId;
@@ -75,6 +78,20 @@ exports.getSeriesById = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Series not found',
+      });
+    }
+
+    const mangakaId = series.mangakaId?._id || series.mangakaId;
+    if (
+      (req.user.role === 'MANGAKA' && mangakaId.toString() !== req.user._id.toString()) ||
+      (
+        req.user.role === 'EDITOR' &&
+        (!series.editorId || series.editorId.toString() !== req.user._id.toString())
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have access to this series',
       });
     }
 

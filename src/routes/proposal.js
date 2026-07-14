@@ -135,7 +135,7 @@ router.put('/:id/revision', authorize('EDITOR', 'BOARD_MEMBER'), requestRevision
  *       200:
  *         description: Proposal forwarded successfully
  */
-router.put('/:id/forward', authorize('EDITOR', 'BOARD_MEMBER'), forwardProposal);
+router.put('/:id/forward', authorize('EDITOR'), forwardProposal);
 
 /**
  * @swagger

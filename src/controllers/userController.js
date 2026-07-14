@@ -7,6 +7,20 @@ exports.getUsers = async (req, res) => {
   try {
     const { role } = req.query;
     const filter = {};
+    if (req.user.role === 'MANGAKA' && role !== 'ASSISTANT') {
+      return res.status(403).json({
+        success: false,
+        message: 'Mangaka can only list assistant accounts',
+      });
+    }
+
+    if (req.user.role === 'BOARD_MEMBER' && role !== 'BOARD_MEMBER') {
+      return res.status(403).json({
+        success: false,
+        message: 'Board members can only list board accounts',
+      });
+    }
+
 
     if (role) {
       filter.role = role;
@@ -14,6 +28,9 @@ exports.getUsers = async (req, res) => {
 
     // Soft delete filter
     filter.deletedAt = null;
+    if (req.user.role !== 'ADMIN') {
+      filter.isActive = { $ne: false };
+    }
 
     const users = await User.find(filter)
       .select('-password')
@@ -151,10 +168,15 @@ exports.updateUser = async (req, res) => {
   }
 };
 
-// @desc    Toggle user active status
-// @route   PUT /api/users/:id/status
 exports.toggleUserStatus = async (req, res) => {
   try {
+    if (req.params.id === req.user._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot activate/deactivate yourself',
+      });
+    }
+
     const user = await User.findOne({ 
       _id: req.params.id,
       deletedAt: null 

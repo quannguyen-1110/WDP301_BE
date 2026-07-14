@@ -14,6 +14,26 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const allowedExtensions = new Set([
+  ".zip",
+  ".pdf",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".psd",
+  ".clip",
+]);
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024, files: 1, fields: 20, parts: 25 },
+  fileFilter: (req, file, cb) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (!allowedExtensions.has(extension)) {
+      return cb(new multer.MulterError("LIMIT_UNEXPECTED_FILE", file.fieldname));
+    }
+    return cb(null, true);
+  },
+});
 
 module.exports = upload;

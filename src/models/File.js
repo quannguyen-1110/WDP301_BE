@@ -29,7 +29,7 @@ const fileSchema = new mongoose.Schema(
 
     roleUploaded: {
       type: String,
-      enum: ["MANGAKA", "ASSISTANT"],
+      enum: ["ADMIN", "MANGAKA", "ASSISTANT"],
       required: true,
     },
   },

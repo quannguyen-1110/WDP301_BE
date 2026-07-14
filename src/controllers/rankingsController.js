@@ -146,7 +146,7 @@ exports.updateScores = async (req, res) => {
       }),
     );
 
-    req.io.emit("rankings_updated", data);
+    if (req.io) req.io.emit("rankings_updated", data);
 
     await sendBottom3Notifications(
       req,
@@ -218,7 +218,7 @@ exports.applyDirective = async (req, res) => {
       directive: ranking.directive,
     };
 
-    req.io.emit("directive_applied", result);
+    if (req.io) req.io.emit("directive_applied", result);
 
     res.json({ data: result });
   } catch (error) {

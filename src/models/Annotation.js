@@ -1,6 +1,16 @@
 const mongoose = require("mongoose");
 
-const ANNOTATION_TYPE = ["CONTENT", "SCRIPT", "DIALOGUE"];
+const ANNOTATION_TYPE = [
+  "DIALOGUE_ISSUE",
+  "CONTENT",
+  "SCRIPT",
+  "DIALOGUE",
+  "STORY_ISSUE",
+  "SCRIPT_REVISION",
+  "CONTENT_CORRECTION",
+  "SCENE_IMPROVEMENT",
+  "GENERAL_FEEDBACK",
+];
 
 const annotationSchema = new mongoose.Schema(
   {

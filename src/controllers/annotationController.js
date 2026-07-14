@@ -1,7 +1,27 @@
 const mongoose = require('mongoose');
 const Annotation = require('../models/Annotation.js');
 const Page = require('../models/Page.js');
+const Chapter = require('../models/Chapter.js');
+const Series = require('../models/Series.js');
+const Task = require('../models/Task.js');
 const { logAction } = require('../utils/auditLogger');
+
+const canManagePage = async (user, pageId) => {
+  if (user.role === 'ADMIN') return true;
+  if (user.role === 'BOARD_MEMBER') return true;
+  if (user.role === 'ASSISTANT') return Boolean(await Task.exists({ assignedTo: user._id, pageIds: pageId }));
+  const page = await Page.findById(pageId).select('chapterId');
+  if (!page) return false;
+  const chapter = await Chapter.findById(page.chapterId).select('seriesId');
+  if (!chapter) return false;
+  if (user.role === 'MANGAKA') {
+    return Boolean(await Series.exists({ _id: chapter.seriesId, mangakaId: user._id }));
+  }
+  if (user.role === 'EDITOR') {
+    return Boolean(await Series.exists({ _id: chapter.seriesId, editorId: user._id }));
+  }
+  return false;
+};
 
 // @desc    Create a new annotation on a page
 exports.createAnnotation = async (req, res) => {
@@ -27,6 +47,13 @@ exports.createAnnotation = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Page not found',
+      });
+    }
+
+    if (!(await canManagePage(req.user, page._id))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You cannot annotate pages outside your managed series',
       });
     }
 
@@ -76,6 +103,13 @@ exports.getAnnotationsByPage = async (req, res) => {
       });
     }
 
+    if (!(await canManagePage(req.user, req.params.pageId))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have access to annotations for this page',
+      });
+    }
+
     const annotations = await Annotation.find({ pageId: req.params.pageId })
       .populate('annotatorId', 'name email role')
       .sort({ createdAt: 1 });
@@ -106,7 +140,8 @@ exports.updateAnnotation = async (req, res) => {
       });
     }
 
-    if (annotation.annotatorId.toString() !== req.user._id.toString() && req.user.role !== 'EDITOR') {
+    const ownsAnnotation = annotation.annotatorId.toString() === req.user._id.toString();
+    if (!ownsAnnotation && !(await canManagePage(req.user, annotation.pageId))) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to update this annotation',
@@ -155,7 +190,8 @@ exports.deleteAnnotation = async (req, res) => {
       });
     }
 
-    if (annotation.annotatorId.toString() !== req.user._id.toString() && req.user.role !== 'EDITOR') {
+    const ownsAnnotation = annotation.annotatorId.toString() === req.user._id.toString();
+    if (!ownsAnnotation && !(await canManagePage(req.user, annotation.pageId))) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to delete this annotation',

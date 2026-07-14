@@ -138,6 +138,7 @@ exports.submitTask = async (req, res) => {
     const task = await Task.findOne({
       _id: req.params.taskId,
       assignedTo: req.user._id,
+      status: { $in: ['PENDING', 'IN_PROGRESS', 'REVISION_REQUESTED', 'REVISING'] },
     });
 
     if (!task) {
