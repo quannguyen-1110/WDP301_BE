@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth.js');
-const upload = require("../middleware/upload");
+const upload = require("../middleware/cloudinaryUpload");
 const File = require("../models/File");
 
 router.use(protect);
@@ -25,7 +25,8 @@ router.post(
       const newFile = await File.create({
         fileName: req.file.filename,
         originalName: req.file.originalname,
-        fileUrl: `/uploads/${req.file.filename}`,
+        fileUrl: req.file.path,
+        cloudinaryPublicId: req.file.filename,
         uploadedBy: req.user._id,
         roleUploaded: req.user.role,
         chapterId: req.body.chapterId || null,

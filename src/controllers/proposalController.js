@@ -1,12 +1,10 @@
-const fs = require('fs');
-const path = require('path');
 const SeriesProposal = require('../models/SeriesProposal');
 const Submission = require('../models/SeriesSubmission');
 const Series = require('../models/Series');
 const { logAction } = require('../utils/auditLogger');
 
 
-// @desc    Submit proposal + storyboard file upload
+// @desc    Submit proposal + storyboard file upload (Cloudinary)
 // @route   POST /api/series/proposal
 exports.createProposal = async (req, res) => {
   try {
@@ -19,26 +17,11 @@ exports.createProposal = async (req, res) => {
       });
     }
 
-    const fileExt = path.extname(req.file.originalname).toLowerCase();
-    const allowedExtensions = [".zip", ".pdf", ".png", ".psd", ".clip"];
-
-    if (!allowedExtensions.includes(fileExt)) {
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      return res.status(400).json({
-        success: false,
-        message: `Invalid storyboard file type. Allowed extensions: ${allowedExtensions.join(", ")}`,
-      });
-    }
-
-    const storyboardUrl = `/api/series/proposal/file/${req.file.filename}`;
-
     const proposal = await SeriesProposal.create({
       title,
       genre,
       synopsis,
-      storyboardUrl,
+      storyboardUrl: req.file.path,
       storyboardPath: req.file.path,
       storyboardOriginalName: req.file.originalname,
       mangakaId: req.user._id,
@@ -67,9 +50,6 @@ exports.createProposal = async (req, res) => {
       },
     });
   } catch (error) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
     res.status(500).json({
       success: false,
       message: error.message,
@@ -135,7 +115,7 @@ exports.getProposalById = async (req, res) => {
   }
 };
 
-// @desc    Download storyboard file
+// @desc    Download storyboard file (redirects to Cloudinary URL)
 exports.downloadStoryboard = async (req, res) => {
   try {
     const proposal = await SeriesProposal.findById(req.params.id);
@@ -147,17 +127,14 @@ exports.downloadStoryboard = async (req, res) => {
       });
     }
 
-    if (!fs.existsSync(proposal.storyboardPath)) {
+    if (!proposal.storyboardUrl) {
       return res.status(404).json({
         success: false,
-        message: "Storyboard file not found on server",
+        message: "Storyboard URL not available",
       });
     }
 
-    res.download(
-      path.resolve(proposal.storyboardPath),
-      proposal.storyboardOriginalName,
-    );
+    res.redirect(proposal.storyboardUrl);
   } catch (error) {
     res.status(500).json({
       success: false,

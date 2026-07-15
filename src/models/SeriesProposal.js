@@ -67,7 +67,7 @@ const seriesProposalSchema = new mongoose.Schema(
     },
     storyboardPath: {
       type: String,
-      required: [true, 'Storyboard filesystem path is required'],
+      default: '',
     },
     storyboardOriginalName: {
       type: String,
