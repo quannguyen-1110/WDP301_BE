@@ -36,6 +36,6 @@ router.get('/:seriesId', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA')
 /**
  * Get all ratings
  */
-router.get('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), getAllRatings);
+router.get('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA'), getAllRatings);
 
 module.exports = router;

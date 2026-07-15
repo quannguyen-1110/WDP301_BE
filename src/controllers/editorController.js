@@ -2,7 +2,7 @@ const Series = require('../models/Series.js');
 const Chapter = require('../models/Chapter.js');
 const Page = require('../models/Page.js');
 const Rating = require('../models/Rating.js');
-const SeriesRank = require('../models/SeriesRank.js');
+const Ranking = require('../models/Ranking.js');
 const Task = require('../models/Task.js');
 
 // @desc    Get series managed by the editor
@@ -52,8 +52,8 @@ exports.getSeriesStats = async (req, res) => {
     const totalRatingEntries = ratings.length;
 
     // 3. Get current rank
-    const latestRankRecord = await SeriesRank.findOne({ seriesId: series._id })
-      .sort({ rankedOn: -1 });
+    const latestRankRecord = await Ranking.findOne({ seriesId: series._id })
+      .sort({ cycleStart: -1 });
     const currentRank = latestRankRecord ? latestRankRecord.rank : null;
     const prevRank = latestRankRecord ? latestRankRecord.prevRank : null;
 

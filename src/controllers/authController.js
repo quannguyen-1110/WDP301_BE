@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { USER_ROLES } = require('../models/User');
 const VerificationToken = require('../models/VerificationToken');
 const nodemailer = require('nodemailer');
 
@@ -117,6 +118,15 @@ exports.sendVerificationCode = async (req, res) => {
 exports.register = async (req, res) => {
   try {
     const { name, email, password, role, verificationCode } = req.body;
+    const publicRoles = USER_ROLES;
+
+    if (!publicRoles.includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message: `Public registration only supports: ${publicRoles.join(', ')}`,
+      });
+    }
+
 
     if (!verificationCode) {
       return res.status(400).json({
@@ -190,6 +200,13 @@ exports.login = async (req, res) => {
         message: 'Invalid credentials',
       });
     }
+    if (user.isActive === false || user.deletedAt) {
+      return res.status(403).json({
+        success: false,
+        message: 'This account is inactive',
+      });
+    }
+
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {

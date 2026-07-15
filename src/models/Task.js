@@ -4,8 +4,13 @@ const TASK_STATUS = [
   'PENDING',
   'IN_PROGRESS',
   'SUBMITTED',
+  'MANGAKA_APPROVED',
   'APPROVED',
   'REVISION_REQUESTED',
+  'REVISING',
+  'COMPLETED',
+  'ASSIGNED',
+  'PENDING_REVIEW',
 ];
 
 const taskSchema = new mongoose.Schema(

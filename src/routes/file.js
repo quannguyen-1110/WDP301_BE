@@ -3,6 +3,15 @@ const router = express.Router();
 const { protect, authorize } = require('../middleware/auth.js');
 const upload = require("../middleware/cloudinaryUpload");
 const File = require("../models/File");
+const Chapter = require("../models/Chapter");
+const Series = require("../models/Series");
+const Task = require("../models/Task");
+const fs = require("fs");
+const {
+  downloadFile,
+  getAllFiles,
+  getFile,
+} = require("../controllers/fileController");
 
 router.use(protect);
 
@@ -20,6 +29,30 @@ router.post(
           success: false,
           message: "No file uploaded",
         });
+      }
+
+      if (req.body.chapterId) {
+        const chapter = await Chapter.findById(req.body.chapterId).select("seriesId");
+        let allowed = Boolean(chapter);
+        if (allowed && req.user.role === "MANGAKA") {
+          allowed = Boolean(await Series.exists({
+            _id: chapter.seriesId,
+            mangakaId: req.user._id,
+          }));
+        }
+        if (allowed && req.user.role === "ASSISTANT") {
+          allowed = Boolean(await Task.exists({
+            chapterId: chapter._id,
+            assignedTo: req.user._id,
+          }));
+        }
+        if (!allowed) {
+          if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+          return res.status(403).json({
+            success: false,
+            message: "You cannot upload files to this chapter",
+          });
+        }
       }
 
       const newFile = await File.create({
@@ -58,6 +91,8 @@ router.post(
 /**
  * Get all files (ADMIN + EDITOR + MANGAKA)
  */
+router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA'), getAllFiles);
+
 router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA'), async (req, res) => {
   try {
     const files = await File.find()
@@ -80,6 +115,12 @@ router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA'), async (req, res) => {
 /**
  * Download file
  */
+router.get(
+  "/download/:id",
+  authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR'),
+  downloadFile,
+);
+
 router.get("/download/:id", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR'), async (req, res) => {
   try {
     const file = await File.findById(req.params.id);
@@ -102,6 +143,8 @@ router.get("/download/:id", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR')
 /**
  * Get file detail
  */
+router.get("/:id", authorize('ADMIN', 'EDITOR', 'MANGAKA'), getFile);
+
 router.get("/:id", authorize('ADMIN', 'EDITOR', 'MANGAKA'), async (req, res) => {
   try {
     const file = await File.findById(req.params.id)

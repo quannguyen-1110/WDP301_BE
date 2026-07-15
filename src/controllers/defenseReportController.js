@@ -2,7 +2,7 @@ const DefenseReport = require('../models/DefenseReport');
 const Series = require('../models/Series');
 const Chapter = require('../models/Chapter');
 const Rating = require('../models/Rating');
-const SeriesRank = require('../models/SeriesRank');
+const Ranking = require('../models/Ranking');
 
 // @desc    Create a new defense report (DRAFT)
 // @route   POST /api/defense-reports
@@ -30,8 +30,8 @@ exports.createDefenseReport = async (req, res) => {
     const ratings = await Rating.find({ seriesId: series._id });
     const totalVotes = ratings.reduce((sum, r) => sum + (r.voteCount || 0), 0);
 
-    const latestRankRecord = await SeriesRank.findOne({ seriesId: series._id })
-      .sort({ rankedOn: -1 });
+    const latestRankRecord = await Ranking.findOne({ seriesId: series._id })
+      .sort({ cycleStart: -1 });
     const currentRank = latestRankRecord ? latestRankRecord.rank : null;
 
     const defenseReport = await DefenseReport.create({

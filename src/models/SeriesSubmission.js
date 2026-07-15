@@ -53,10 +53,21 @@ const seriesSubmissionSchema = new mongoose.Schema(
     decisionStatus: {
       type: String,
       enum: DECISION_STATUS,
+      default: 'PENDING',
     },
     requiredVoters: {
       type: [requiredVoterSchema],
       default: [],
+    },
+    reason: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    newSchedule: {
+      type: String,
+      enum: ['WEEKLY', 'MONTHLY', null],
+      default: null,
     },
   },
   { timestamps: true },

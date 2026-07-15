@@ -20,7 +20,7 @@ router.use(protect);
 /**
  * Create submission
  */
-router.post('/', authorize('ADMIN', 'MANGAKA'), createSubmission);
+router.post('/', authorize('ADMIN'), createSubmission);
 
 /**
  * Get all submissions by Proposal status(ADMIN + BOARD)
@@ -55,11 +55,11 @@ router.get('/:submissionId/votes', authorize('ADMIN', 'BOARD_MEMBER', 'MANGAKA')
 /**
  * Update submission
  */
-router.put('/:submissionId', authorize('ADMIN', 'MANGAKA'), updateSubmission);
+router.put('/:submissionId', authorize('ADMIN'), updateSubmission);
 
 /**
  * Delete submission
  */
-router.delete('/:submissionId', authorize('ADMIN', 'MANGAKA'), deleteSubmission);
+router.delete('/:submissionId', authorize('ADMIN'), deleteSubmission);
 
 module.exports = router;

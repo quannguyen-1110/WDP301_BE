@@ -8,7 +8,7 @@ const {
   updateChapter,
   deleteChapter,
   publishChapter,
-  getChapterBySeriesId,
+  getChapterById,
 } = require('../controllers/chapterController.js');
 
 // Protect all routes
@@ -19,7 +19,7 @@ router.use(protect);
  */
 router.get('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA', 'ASSISTANT'), getAllChapters);
 
-router.get('/:id', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA', 'ASSISTANT'), getChapterBySeriesId);
+router.get('/:id', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA', 'ASSISTANT'), getChapterById);
 
 /**
  * Create chapter

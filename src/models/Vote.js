@@ -6,7 +6,7 @@ const voteSchema = new mongoose.Schema(
   {
     submissionId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Submission',
+      ref: 'SeriesSubmission',
       required: true,
     },
     voterId: {
@@ -23,5 +23,7 @@ const voteSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+voteSchema.index({ submissionId: 1, voterId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Vote', voteSchema);

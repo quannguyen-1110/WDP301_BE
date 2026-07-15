@@ -6,6 +6,7 @@ const PROPOSAL_STATUS = [
   'REVISION_REQUESTED',
   'RESUBMITTED',
   'APPROVED_BY_TANTOU',
+  'SENT_TO_EDITORIAL_BOARD',
   'APPROVED',
   'SERIES_CREATED',
   'REJECTED',
@@ -90,6 +91,11 @@ const seriesProposalSchema = new mongoose.Schema(
     submittedAt: {
       type: Date,
       default: Date.now,
+    },
+    seriesId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Series',
+      default: null,
     },
   },
   {
