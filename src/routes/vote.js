@@ -1,41 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const { protect, authorize } = require('../middleware/auth.js');
+const { protect, authorize } = require('../middleware/auth');
 
 const {
   submitVote,
+  tieBreakProposal,
   getMyVotes,
   updateVote,
   deleteVote,
-  getVotesBySubmission
-} = require('../controllers/voteController.js');
+  getVotesBySubmission,
+} = require('../controllers/voteController');
 
-// Protect all routes
 router.use(protect);
 
-/**
- * Submit vote
- */
 router.post('/', authorize('ADMIN', 'BOARD_MEMBER'), submitVote);
-
-/**
- * Get my votes
- */
+router.post('/submission/:id/tie-break', authorize('ADMIN', 'BOARD_MEMBER'), tieBreakProposal);
 router.get('/me', authorize('ADMIN', 'BOARD_MEMBER'), getMyVotes);
-
-/**
- * Get votes by submission
- */
 router.get('/submission/:id', authorize('ADMIN', 'BOARD_MEMBER', 'EDITOR'), getVotesBySubmission);
-
-/**
- * Update vote
- */
 router.put('/:voteId', authorize('ADMIN'), updateVote);
-
-/**
- * Delete vote
- */
 router.delete('/:voteId', authorize('ADMIN'), deleteVote);
 
 module.exports = router;

@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
-const VOTE_DECISION = ['ACCEPT', 'REJECT'];
+const VOTE_DECISION = [
+  'ACCEPT',
+  'REJECT',
+  'PUBLISH',
+  'RESCHEDULE',
+];
 
 const voteSchema = new mongoose.Schema(
   {
@@ -27,3 +32,4 @@ const voteSchema = new mongoose.Schema(
 voteSchema.index({ submissionId: 1, voterId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Vote', voteSchema);
+module.exports.VOTE_DECISION = VOTE_DECISION;

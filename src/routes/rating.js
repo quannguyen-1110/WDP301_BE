@@ -1,41 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const { protect, authorize } = require('../middleware/auth.js');
+const { protect, authorize } = require('../middleware/auth');
 
 const {
   getSeriesRatings,
   submitRating,
+  importRatings,
   updateRating,
   deleteRating,
-  getAllRatings
-} = require('../controllers/ratingController.js');
+  getAllRatings,
+} = require('../controllers/ratingController');
 
-// Protect all routes
 router.use(protect);
 
-/**
- * Submit rating
- */
-router.post('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), submitRating);
-
-/**
- * Update rating
- */
-router.put('/:ratingId', authorize('ADMIN', 'EDITOR'), updateRating);
-
-/**
- * Delete rating
- */
-router.delete('/:ratingId', authorize('ADMIN', 'EDITOR'), deleteRating);
-
-/**
- * Get ratings by series
- */
+router.post('/', authorize('ADMIN', 'BOARD_MEMBER'), submitRating);
+router.post('/import', authorize('ADMIN', 'BOARD_MEMBER'), importRatings);
+router.put('/:ratingId', authorize('ADMIN', 'BOARD_MEMBER'), updateRating);
+router.delete('/:ratingId', authorize('ADMIN', 'BOARD_MEMBER'), deleteRating);
 router.get('/:seriesId', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA'), getSeriesRatings);
-
-/**
- * Get all ratings
- */
 router.get('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA'), getAllRatings);
 
 module.exports = router;

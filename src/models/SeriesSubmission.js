@@ -1,8 +1,17 @@
 const mongoose = require('mongoose');
 
-const SUBMISSION_TYPE = ['PITCH', 'POST_DECISION', 'CHANGE_EDITOR'];
-const ACTION_TYPE = ['APPROVE_WEEKLY', 'APPROVE_MONTHLY', 'CANCEL', 'CHANGE_FORMAT'];
-const DECISION_STATUS = ['PENDING', 'APPROVED', 'REJECTED'];
+const SUBMISSION_TYPE = ['PITCH', 'POST_DECISION', 'CHANGE_EDITOR', 'PUBLICATION_REVIEW'];
+const ACTION_TYPE = [
+  'APPROVE_WEEKLY',
+  'APPROVE_MONTHLY',
+  'CONTINUE',
+  'CANCEL',
+  'CHANGE_FORMAT',
+  'PUBLISH',
+  'REJECT',
+  'RESCHEDULE',
+];
+const DECISION_STATUS = ['PENDING', 'TIE_BREAK_REQUIRED', 'APPROVED', 'REJECTED'];
 
 const requiredVoterSchema = new mongoose.Schema(
   {
@@ -36,6 +45,11 @@ const seriesSubmissionSchema = new mongoose.Schema(
       ref: 'SeriesProposal',
       default: null,
     },
+    chapterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Chapter',
+      default: null,
+    },
     submissionType: {
       type: String,
       enum: SUBMISSION_TYPE,
@@ -59,6 +73,24 @@ const seriesSubmissionSchema = new mongoose.Schema(
       type: [requiredVoterSchema],
       default: [],
     },
+    chairpersonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    tiedDecisions: {
+      type: [String],
+      default: [],
+    },
+    decidedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    decidedAt: {
+      type: Date,
+      default: null,
+    },
     reason: {
       type: String,
       trim: true,
@@ -74,3 +106,6 @@ const seriesSubmissionSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('SeriesSubmission', seriesSubmissionSchema);
+module.exports.SUBMISSION_TYPE = SUBMISSION_TYPE;
+module.exports.ACTION_TYPE = ACTION_TYPE;
+module.exports.DECISION_STATUS = DECISION_STATUS;

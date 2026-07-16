@@ -25,6 +25,7 @@ const proposalRoutes = require('./routes/proposal.js');
 const notificationRoutes = require('./routes/notification.js');
 const directiveRoutes = require('./routes/directive.js');
 const defenseReportRoutes = require('./routes/defenseReport.js');
+const boardRoutes = require('./routes/board.js');
 
 const { protect } = require('./middleware/auth.js');
 
@@ -68,6 +69,7 @@ const setupApp = (io) => {
   app.use('/api/audit-logs', protect, auditLogRoutes);
 
   app.use('/api/directives', protect, directiveRoutes);
+  app.use('/api/board', boardRoutes);
   // FILE MANAGEMENT
   app.use('/api/files', protect, fileRoutes);
 

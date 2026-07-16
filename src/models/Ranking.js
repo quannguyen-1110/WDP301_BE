@@ -19,6 +19,12 @@ const rankingSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    ratingScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
     trend: {
       type: String,
       enum: ['up', 'down', 'flat'],

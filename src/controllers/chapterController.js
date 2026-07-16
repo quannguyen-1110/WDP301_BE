@@ -174,6 +174,13 @@ exports.updateChapter = async (req, res) => {
       });
     }
 
+    if (req.body.status === 'PUBLISHED' || req.body.publishedAt !== undefined) {
+      return res.status(409).json({
+        success: false,
+        message: 'Publishing fields are controlled by Editorial Board approval',
+      });
+    }
+
     if (req.body.deadline) {
       req.body.dueAt = req.body.deadline;
     }
@@ -268,65 +275,8 @@ exports.deleteChapter = async (req, res) => {
   }
 };
 
-// PUBLISH CHAPTER
-exports.publishChapter = async (req, res) => {
-  try {
-    const existingChapter = await Chapter.findById(req.params.id);
-    if (!existingChapter) {
-      return res.status(404).json({ success: false, message: "Chapter not found" });
-    }
-    if (!(await canManageSeries(req.user, existingChapter.seriesId))) {
-      return res.status(403).json({
-        success: false,
-        message: "You can only publish chapters for a series you manage",
-      });
-    }
-
-    const tasks = await Task.find({ chapterId: existingChapter._id }).select("status");
-    if (tasks.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "A chapter must have at least one task before publishing",
-      });
-    }
-    if (tasks.some((task) => task.status !== "APPROVED")) {
-      return res.status(400).json({
-        success: false,
-        message: "All chapter tasks must be approved before publishing",
-      });
-    }
-
-    const chapter = await Chapter.findByIdAndUpdate(
-      req.params.id,
-      {
-        status: CHAPTER_STATUS.COMPLETED,
-        publishedAt: new Date(),
-      },
-      { new: true }
-    );
-
-    if (!chapter) {
-      return res.status(404).json({ success: false, message: "Chapter not found" });
-    }
-
-    await logAction(
-      req.user._id,
-      req.user.name || 'Unknown',
-      "Published Chapter",
-      `Chapter ID: ${req.params.id}`,
-      `Series ID: ${chapter.seriesId}`
-    );
-
-    if (req.io) {
-      req.io.emit("chapter_published", chapter);
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Chapter published successfully",
-      data: chapter,
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
+// Publication is finalized by an approved Editorial Board session.
+exports.publishChapter = async (req, res) => res.status(409).json({
+  success: false,
+  message: 'Direct publishing is disabled. Use the Editorial Board publication review flow.',
+});
