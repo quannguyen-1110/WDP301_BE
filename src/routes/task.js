@@ -44,6 +44,6 @@ router.get(
 /**
  * Review task - Cho phép ADMIN và MANGAKA
  */
-router.put('/:id/review', authorize('ADMIN', 'MANGAKA'), reviewTask);
+router.put('/:id/review', authorize('ADMIN', 'MANGAKA', 'EDITOR'), reviewTask);
 
 module.exports = router;

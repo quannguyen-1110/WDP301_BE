@@ -1,6 +1,8 @@
 const Task = require('../models/Task.js');
 const Page = require('../models/Page.js');
 const User = require('../models/User.js');
+const Series = require('../models/Series.js');
+const Chapter = require('../models/Chapter.js');
 const AssistantEarning = require('../models/AssistantEarning.js');
 const Notification = require('../models/Notification.js');
 const { logAction } = require('../utils/auditLogger');
@@ -16,15 +18,75 @@ exports.createTask = async (req, res) => {
       pageIds,
       dueAt,
       regions,
+      region,
+      sourceImageUrl,
     } = req.body;
 
     // Validate assignedTo user role
     const assistant = await User.findById(assignedTo);
 
-    if (!assistant || assistant.role !== 'ASSISTANT') {
+    if (!assistant || assistant.role !== 'ASSISTANT' || assistant.isActive === false || assistant.deletedAt) {
       return res.status(400).json({
         success: false,
         message: 'Assigned user must be an ASSISTANT',
+      });
+    }
+    const chapter = await Chapter.findOne({ _id: chapterId, seriesId });
+    if (!chapter) {
+      return res.status(400).json({
+        success: false,
+        message: 'Chapter does not belong to the selected series',
+      });
+    }
+
+
+    if (req.user.role === 'MANGAKA') {
+      const ownsSeries = await Series.exists({ _id: seriesId, mangakaId: req.user._id });
+      if (!ownsSeries) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only assign tasks for your own series',
+        });
+      }
+    }
+
+    const resolvedPageIds = Array.isArray(pageIds) ? [...pageIds] : [];
+    if (resolvedPageIds.length === 0 && sourceImageUrl) {
+    if (
+      sourceImageUrl &&
+      !/^\/uploads\/[A-Za-z0-9._-]+$/.test(sourceImageUrl)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid source image URL',
+      });
+    }
+
+      const latestPage = await Page.findOne({ chapterId }).sort({ pageNumber: -1 });
+      const page = await Page.create({
+        chapterId,
+        pageNumber: (latestPage?.pageNumber || 0) + 1,
+        imageUrl: sourceImageUrl,
+        status: 'HAS_TASK',
+      });
+      resolvedPageIds.push(page._id);
+    }
+
+    if (resolvedPageIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one page or a source image is required',
+      });
+    }
+
+    const matchingPages = await Page.countDocuments({
+      _id: { $in: resolvedPageIds },
+      chapterId,
+    });
+    if (matchingPages !== resolvedPageIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'All task pages must belong to the selected chapter',
       });
     }
 
@@ -35,15 +97,15 @@ exports.createTask = async (req, res) => {
       assignedBy: req.user._id,
       title,
       description,
-      pageIds: pageIds || [],
+      pageIds: resolvedPageIds,
       dueAt,
-      regions: regions || [],
+      regions: regions || (region ? [region] : []),
     });
 
     // Update assigned pages
-    if (pageIds && pageIds.length > 0) {
+    if (resolvedPageIds.length > 0) {
       await Page.updateMany(
-        { _id: { $in: pageIds } },
+        { _id: { $in: resolvedPageIds }, chapterId },
         { status: 'HAS_TASK' }
       );
     }
@@ -54,7 +116,7 @@ exports.createTask = async (req, res) => {
       req.user.name || 'Unknown',
       "Assigned New Task",
       `Task: ${title}`,
-      `Series: ${seriesId}, Chapter: ${chapterId}, Assistant: ${assignedTo}, Pages: ${pageIds?.length || 0}`
+      `Series: ${seriesId}, Chapter: ${chapterId}, Assistant: ${assignedTo}, Pages: ${resolvedPageIds.length}`
     );
 
     // Create Notification for Assistant
@@ -92,8 +154,12 @@ exports.createTask = async (req, res) => {
 
 exports.submitTask = async (req, res) => {
   try {
-    const task = await Task.findByIdAndUpdate(
-      req.params.id,
+    const task = await Task.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        assignedTo: req.user._id,
+        status: { $in: ['PENDING', 'IN_PROGRESS', 'REVISION_REQUESTED', 'REVISING'] },
+      },
       {
         status: 'SUBMITTED',
         submittedAt: new Date(),
@@ -106,7 +172,7 @@ exports.submitTask = async (req, res) => {
     if (!task) {
       return res.status(404).json({
         success: false,
-        message: 'Task not found',
+        message: 'Task not found, not assigned to you, or not submittable',
       });
     }
 
@@ -165,6 +231,9 @@ exports.getMyTasks = async (req, res) => {
       filter.assignedTo = userId;
     } else if (req.user.role === 'MANGAKA') {
       filter.assignedBy = userId;
+    } else if (req.user.role === 'EDITOR') {
+      const seriesIds = await Series.find({ editorId: userId }).distinct('_id');
+      filter.seriesId = { $in: seriesIds };
     } else {
       filter = {
         $or: [
@@ -213,11 +282,69 @@ exports.reviewTask = async (req, res) => {
         message: 'Task not found',
       });
     }
+    const series = await Series.findById(task.seriesId).select('mangakaId editorId');
+    if (req.user.role === 'MANGAKA' && task.assignedBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only review tasks you assigned',
+      });
+    }
+    if (
+      req.user.role === 'EDITOR' &&
+      (!series?.editorId || series.editorId.toString() !== req.user._id.toString())
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only review tasks for your assigned series',
+      });
+    }
+    if (!['SUBMITTED', 'MANGAKA_APPROVED'].includes(task.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Task cannot be reviewed from status ${task.status}`,
+      });
+    }
+
+    if (action === 'APPROVE' && req.user.role === 'MANGAKA') {
+      task.status = 'MANGAKA_APPROVED';
+      task.reviewedAt = new Date();
+      task.reviewNote = reviewNote || 'Approved by mangaka; awaiting editor approval';
+      await task.save();
+
+      await Page.updateMany(
+        { _id: { $in: task.pageIds }, status: { $ne: 'APPROVED' } },
+        {
+          status: 'COMPLETED',
+          reviewNote: task.reviewNote,
+        },
+      );
+      await logAction(
+        req.user._id,
+        req.user.name || 'Unknown',
+        'Mangaka Approved Task',
+        `Task: ${task.title}`,
+        `Awaiting editor approval. Review: ${reviewNote || 'No note'}`,
+      );
+      if (req.io) req.io.emit('task_mangaka_approved', task);
+      return res.status(200).json({
+        success: true,
+        message: 'Task approved by mangaka and sent to editor',
+        data: task,
+      });
+    }
+
+    if (action === 'APPROVE' && req.user.role === 'EDITOR' && task.status !== 'MANGAKA_APPROVED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Mangaka approval is required before editor approval',
+      });
+    }
+
 
     if (action === 'APPROVE') {
       task.status = 'APPROVED';
       task.reviewedAt = new Date();
-      task.reviewNote = reviewNote || 'Approved by author';
+      task.reviewNote = reviewNote || 'Final approval';
 
       await task.save();
 

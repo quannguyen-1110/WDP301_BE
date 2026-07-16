@@ -17,6 +17,11 @@ const fileSchema = new mongoose.Schema(
       required: true,
     },
 
+    cloudinaryPublicId: {
+      type: String,
+      default: null,
+    },
+
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -29,7 +34,7 @@ const fileSchema = new mongoose.Schema(
 
     roleUploaded: {
       type: String,
-      enum: ["MANGAKA", "ASSISTANT"],
+      enum: ["ADMIN", "MANGAKA", "ASSISTANT"],
       required: true,
     },
   },

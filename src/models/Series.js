@@ -1,7 +1,17 @@
 const mongoose = require('mongoose');
 
 // Status thống nhất chung cho toàn team
-const SERIES_STATUS = ['ACTIVE', 'ON_HIATUS', 'IN_PRODUCTION', 'PUBLISHED', 'COMPLETED', 'REJECTED', 'CANCELLED', 'PENDING'];
+const SERIES_STATUS = [
+  'PENDING',
+  'APPROVED',
+  'ACTIVE',
+  'ON_HIATUS',
+  'IN_PRODUCTION',
+  'PUBLISHED',
+  'COMPLETED',
+  'REJECTED',
+  'CANCELLED',
+];
 const PUBLICATION_SCHEDULE = ['WEEKLY', 'MONTHLY'];
 
 const seriesSchema = new mongoose.Schema(
@@ -45,6 +55,10 @@ const seriesSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    proposalId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SeriesProposal',
+    },
     reviewNote: {
       type: String,
       default: '',
@@ -58,6 +72,14 @@ const seriesSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+seriesSchema.index(
+  { proposalId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { proposalId: { $type: 'objectId' } },
+  },
+);
+
 
 module.exports = mongoose.model('Series', seriesSchema);
 module.exports.SERIES_STATUS = SERIES_STATUS;

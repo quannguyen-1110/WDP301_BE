@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const upload = require('../middleware/upload');
+const upload = require('../middleware/cloudinaryUpload');
 const { protect, authorize } = require('../middleware/auth');
 const {
   createProposal,
@@ -11,11 +11,11 @@ const {
   requestRevision,
   forwardProposal,
   rejectProposal,
-  sendToBoard,
-  approveProposal,
   resubmitProposal,
+  approveProposal,
 } = require('../controllers/proposalController');
 
+//Changed line
 // Protect all routes
 router.use(protect);
 
@@ -25,14 +25,44 @@ router.use(protect);
 router.post('/', authorize('MANGAKA'), upload.single('storyboard'), createProposal);
 
 /**
- * Get proposals (ADMIN, EDITOR, MANGAKA, BOARD_MEMBER)
+ * @swagger
+ * /api/series/proposal:
+ *   get:
+ *     summary: Get proposals (optionally filtered by status)
+ *     tags: [Proposals]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by proposal status
+ *     responses:
+ *       200:
+ *         description: Return list of proposals
  */
-router.get('/', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'BOARD_MEMBER'), getProposals);
+router.get('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA'), getProposals);
 
 /**
- * Get proposal by ID
+ * @swagger
+ * /api/series/proposal/{id}:
+ *   get:
+ *     summary: Get a single proposal by ID
+ *     tags: [Proposals]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Return proposal details
  */
-router.get('/:id', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'BOARD_MEMBER'), getProposalById);
+router.get('/:id', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA'), getProposalById);
 
 /**
  * Download storyboard
@@ -40,38 +70,121 @@ router.get('/:id', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'BOARD_MEMBER'), getP
 router.get('/:id/storyboard', authorize('ADMIN', 'EDITOR'), downloadStoryboard);
 
 /**
- * Add review comment to proposal
+ * @swagger
+ * /api/series/proposal/{id}/comment:
+ *   put:
+ *     summary: Add a review comment to a proposal
+ *     tags: [Proposals]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               content:
+ *                 type: string
+ *               isInternal:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Comment added successfully
  */
 router.put('/:id/comment', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'BOARD_MEMBER'), addComment);
 
 /**
- * Request revision
+ * @swagger
+ * /api/series/proposal/{id}/revision:
+ *   put:
+ *     summary: Request revision for a proposal (EDITOR/BOARD_MEMBER only)
+ *     tags: [Proposals]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               content:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Revision requested
  */
-router.put('/:id/revision', authorize('ADMIN', 'EDITOR'), requestRevision);
+router.put('/:id/revision', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), requestRevision);
 
 /**
- * Resubmit proposal after revision
- */
-router.put('/:id/resubmit', authorize('MANGAKA'), resubmitProposal);
-
-/**
- * Forward proposal to Board
+ * @swagger
+ * /api/series/proposal/{id}/forward:
+ *   put:
+ *     summary: Forward proposal to the Board
+ *     tags: [Proposals]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               content:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Proposal forwarded successfully
  */
 router.put('/:id/forward', authorize('ADMIN', 'EDITOR'), forwardProposal);
 
 /**
- * Send proposal to Editorial Board
+ * @swagger
+ * /api/series/proposal/{id}/reject:
+ *   put:
+ *     summary: Reject a proposal
+ *     tags: [Proposals]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               content:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Proposal rejected
  */
-router.put('/:id/send-to-board', authorize('ADMIN', 'EDITOR'), sendToBoard);
+router.put('/:id/reject', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), rejectProposal);
 
 /**
- * Approve proposal
+ * @swagger
+ * /api/series/proposal/{id}/resubmit:
+ *   put:
+ *     summary: Resubmit proposal after revision (MANGAKA only)
+ *     tags: [Proposals]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Proposal resubmitted
+ */
+router.put('/:id/resubmit', authorize('MANGAKA'), resubmitProposal);
+
+/**
+ * @swagger
+ * /api/series/proposal/{id}/approve:
+ *   put:
+ *     summary: Approve proposal by Editorial Board (BOARD_MEMBER only)
+ *     tags: [Proposals]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Proposal approved
  */
 router.put('/:id/approve', authorize('ADMIN', 'BOARD_MEMBER'), approveProposal);
-
-/**
- * Reject proposal
- */
-router.put('/:id/reject', authorize('ADMIN', 'EDITOR'), rejectProposal);
 
 module.exports = router;

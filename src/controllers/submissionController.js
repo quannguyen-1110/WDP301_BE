@@ -4,8 +4,10 @@ const User = require("../models/User.js");
 
 exports.createSubmission = async (req, res) => {
   try {
-    const submission = await Submission.create(req.body);
-    req.io.emit("submission_submitted", submission);
+    const submission = await Submission.create({
+      ...req.body,
+      submittedBy: req.user._id,
+    });
     res.status(201).json({
       success: true,
       data: submission,
@@ -18,12 +20,46 @@ exports.createSubmission = async (req, res) => {
   }
 };
 
-exports.getAllSubmissions = async (req, res) => {
+exports.getAllSubmissionsBySeriesId = async (req, res) => {
   try {
-    const submissions = await Submission.find();
+    const { seriesId } = req.params;
+    let query = Submission.find({ seriesId });
+
+    const submissions = await query.populate({
+      path: 'proposalId',
+      populate: { path: 'mangakaId', select: 'name email' }
+    });
+
     res.status(200).json({
       success: true,
       data: submissions,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.getAllSubmissionsByProposal = async (req, res) => {
+  try {
+    const { proposalStatus } = req.query;
+    let query = Submission.find({});
+
+    const submissions = await query.populate({
+      path: 'proposalId',
+      populate: { path: 'mangakaId', select: 'name email' }
+    });
+
+    let result = submissions;
+    if (proposalStatus) {
+      result = submissions.filter((s) => s.proposalId?.status === proposalStatus);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result,
     });
   } catch (error) {
     res.status(500).json({
@@ -43,6 +79,12 @@ exports.updateSubmission = async (req, res) => {
         runValidators: true,
       },
     );
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: 'Submission not found',
+      });
+    }
     res.status(200).json({
       success: true,
       data: submission,
@@ -58,6 +100,12 @@ exports.updateSubmission = async (req, res) => {
 exports.deleteSubmission = async (req, res) => {
   try {
     const submission = await Submission.findByIdAndDelete(req.params.submissionId);
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: 'Submission not found',
+      });
+    }
     res.status(200).json({
       success: true,
       data: submission,
@@ -73,26 +121,15 @@ exports.deleteSubmission = async (req, res) => {
 exports.getSubmissionById = async (req, res) => {
   try {
     const submission = await Submission.findById(req.params.submissionId);
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: 'Submission not found',
+      });
+    }
     res.status(200).json({
       success: true,
       data: submission,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-exports.getSubmissionsBySeriesId = async (req, res) => {
-  try {
-    const submissions = await Submission.find({
-      seriesId: req.params.seriesId,
-    });
-    res.status(200).json({
-      success: true,
-      data: submissions,
     });
   } catch (error) {
     res.status(500).json({
@@ -150,20 +187,24 @@ exports.assignVoters = async (req, res) => {
       });
     }
 
+    const uniqueUserIds = [...new Set(userIds.map((id) => id.toString()))];
     // Verify all userIds exist and are BOARD_MEMBERs
-    const users = await User.find({ _id: { $in: userIds }, role: "BOARD_MEMBER" });
-    if (users.length !== userIds.length) {
+    const users = await User.find({ _id: { $in: uniqueUserIds }, role: "BOARD_MEMBER" });
+    if (users.length !== uniqueUserIds.length) {
       return res.status(400).json({
         success: false,
         message: "One or more userIds are invalid or not BOARD_MEMBERs",
       });
     }
 
-    const voterEntries = userIds.map((id) => ({
-      userId: id,
-      hasVoted: false,
-      voteId: null,
-    }));
+    const existing = await Submission.findById(submissionId).select('requiredVoters');
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Submission not found' });
+    }
+    const existingIds = new Set(existing.requiredVoters.map((v) => v.userId.toString()));
+    const voterEntries = uniqueUserIds
+      .filter((id) => !existingIds.has(id.toString()))
+      .map((id) => ({ userId: id, hasVoted: false, voteId: null }));
 
     const submission = await Submission.findByIdAndUpdate(
       submissionId,
@@ -178,7 +219,7 @@ exports.assignVoters = async (req, res) => {
       });
     }
 
-    req.io.emit("voters_assigned", { submissionId, requiredVoters: submission.requiredVoters });
+    if (req.io) req.io.emit("voters_assigned", { submissionId, requiredVoters: submission.requiredVoters });
 
     res.status(200).json({
       success: true,

@@ -2,6 +2,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const dotenv = require("dotenv");
 const connectDB = require("./src/config/db.js");
+const { configureCloudinary } = require("./src/config/cloudinary.js");
 const setupApp = require("./src/app.js");
 const initSocket = require("./src/sockets/index.js");
 
@@ -10,6 +11,7 @@ dotenv.config();
 
 const start = async () => {
   await connectDB();
+  configureCloudinary();
 
   const httpServer = http.createServer();
   const io = new Server(httpServer, {

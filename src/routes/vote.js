@@ -31,11 +31,11 @@ router.get('/submission/:id', authorize('ADMIN', 'BOARD_MEMBER', 'EDITOR'), getV
 /**
  * Update vote
  */
-router.put('/:voteId', authorize('ADMIN', 'BOARD_MEMBER'), updateVote);
+router.put('/:voteId', authorize('ADMIN'), updateVote);
 
 /**
  * Delete vote
  */
-router.delete('/:voteId', authorize('ADMIN', 'BOARD_MEMBER'), deleteVote);
+router.delete('/:voteId', authorize('ADMIN'), deleteVote);
 
 module.exports = router;

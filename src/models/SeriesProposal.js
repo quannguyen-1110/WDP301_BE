@@ -68,7 +68,7 @@ const seriesProposalSchema = new mongoose.Schema(
     },
     storyboardPath: {
       type: String,
-      required: [true, 'Storyboard filesystem path is required'],
+      default: '',
     },
     storyboardOriginalName: {
       type: String,
@@ -91,6 +91,11 @@ const seriesProposalSchema = new mongoose.Schema(
     submittedAt: {
       type: Date,
       default: Date.now,
+    },
+    seriesId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Series',
+      default: null,
     },
   },
   {

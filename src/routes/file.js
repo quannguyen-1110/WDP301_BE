@@ -1,8 +1,17 @@
 const express = require("express");
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth.js');
-const upload = require("../middleware/upload");
+const upload = require("../middleware/cloudinaryUpload");
 const File = require("../models/File");
+const Chapter = require("../models/Chapter");
+const Series = require("../models/Series");
+const Task = require("../models/Task");
+const fs = require("fs");
+const {
+  downloadFile,
+  getAllFiles,
+  getFile,
+} = require("../controllers/fileController");
 
 router.use(protect);
 
@@ -22,10 +31,35 @@ router.post(
         });
       }
 
+      if (req.body.chapterId) {
+        const chapter = await Chapter.findById(req.body.chapterId).select("seriesId");
+        let allowed = Boolean(chapter);
+        if (allowed && req.user.role === "MANGAKA") {
+          allowed = Boolean(await Series.exists({
+            _id: chapter.seriesId,
+            mangakaId: req.user._id,
+          }));
+        }
+        if (allowed && req.user.role === "ASSISTANT") {
+          allowed = Boolean(await Task.exists({
+            chapterId: chapter._id,
+            assignedTo: req.user._id,
+          }));
+        }
+        if (!allowed) {
+          if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+          return res.status(403).json({
+            success: false,
+            message: "You cannot upload files to this chapter",
+          });
+        }
+      }
+
       const newFile = await File.create({
         fileName: req.file.filename,
         originalName: req.file.originalname,
-        fileUrl: `/uploads/${req.file.filename}`,
+        fileUrl: req.file.path,
+        cloudinaryPublicId: req.file.filename,
         uploadedBy: req.user._id,
         roleUploaded: req.user.role,
         chapterId: req.body.chapterId || null,
@@ -54,76 +88,20 @@ router.post(
   }
 );
 
-/**
- * Get all files (ADMIN + EDITOR + MANGAKA)
- */
-router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT'), async (req, res) => {
-  try {
-    const files = await File.find()
-      .populate("uploadedBy", "name email role")
-      .populate("chapterId");
-
-    res.status(200).json({
-      success: true,
-      count: files.length,
-      data: files,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
+router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT'), getAllFiles);
 
 /**
  * Download file
  */
-router.get("/download/:id", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR'), async (req, res) => {
-  try {
-    const file = await File.findById(req.params.id);
-    if (!file) {
-      return res.status(404).json({
-        success: false,
-        message: "File not found",
-      });
-    }
-
-    res.download(file.fileUrl);   // Sửa path nếu cần
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
+router.get(
+  "/download/:id",
+  authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR'),
+  downloadFile,
+);
 
 /**
  * Get file detail
  */
-router.get("/:id", authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT'), async (req, res) => {
-  try {
-    const file = await File.findById(req.params.id)
-      .populate("uploadedBy", "name email role")
-      .populate("chapterId");
-
-    if (!file) {
-      return res.status(404).json({
-        success: false,
-        message: "File not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: file,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
+router.get("/:id", authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT'), getFile);
 
 module.exports = router;

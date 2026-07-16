@@ -2,7 +2,14 @@ const mongoose = require("mongoose");
 
 const CHAPTER_STATUS = [
   "IN_PROGRESS",
+  "SUBMITTED",
+  "UNDER_REVIEW",
+  "REVISION_REQUESTED",
+  "APPROVED",
+  "SENT_TO_EDITORIAL",
   "COMPLETED",
+  "PUBLISHED",
+  "ARCHIVED",
 ];
 
 const chapterSchema = new mongoose.Schema(

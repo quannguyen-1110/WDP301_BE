@@ -1,13 +1,10 @@
-const fs = require('fs');
-const path = require('path');
 const SeriesProposal = require('../models/SeriesProposal');
+const Submission = require('../models/SeriesSubmission');
 const Series = require('../models/Series');
-const SeriesSubmission = require('../models/SeriesSubmission');
-const Notification = require('../models/Notification');
 const { logAction } = require('../utils/auditLogger');
 
 
-// @desc    Submit proposal + storyboard file upload
+// @desc    Submit proposal + storyboard file upload (Cloudinary)
 // @route   POST /api/series/proposal
 exports.createProposal = async (req, res) => {
   try {
@@ -20,26 +17,11 @@ exports.createProposal = async (req, res) => {
       });
     }
 
-    const fileExt = path.extname(req.file.originalname).toLowerCase();
-    const allowedExtensions = [".zip", ".pdf", ".png", ".psd", ".clip"];
-
-    if (!allowedExtensions.includes(fileExt)) {
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      return res.status(400).json({
-        success: false,
-        message: `Invalid storyboard file type. Allowed extensions: ${allowedExtensions.join(", ")}`,
-      });
-    }
-
-    const storyboardUrl = `/api/series/proposal/file/${req.file.filename}`;
-
     const proposal = await SeriesProposal.create({
       title,
       genre,
       synopsis,
-      storyboardUrl,
+      storyboardUrl: req.file.path,
       storyboardPath: req.file.path,
       storyboardOriginalName: req.file.originalname,
       mangakaId: req.user._id,
@@ -68,9 +50,6 @@ exports.createProposal = async (req, res) => {
       },
     });
   } catch (error) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
     res.status(500).json({
       success: false,
       message: error.message,
@@ -136,7 +115,7 @@ exports.getProposalById = async (req, res) => {
   }
 };
 
-// @desc    Download storyboard file
+// @desc    Download storyboard file (redirects to Cloudinary URL)
 exports.downloadStoryboard = async (req, res) => {
   try {
     const proposal = await SeriesProposal.findById(req.params.id);
@@ -148,17 +127,14 @@ exports.downloadStoryboard = async (req, res) => {
       });
     }
 
-    if (!fs.existsSync(proposal.storyboardPath)) {
+    if (!proposal.storyboardUrl) {
       return res.status(404).json({
         success: false,
-        message: "Storyboard file not found on server",
+        message: "Storyboard URL not available",
       });
     }
 
-    res.download(
-      path.resolve(proposal.storyboardPath),
-      proposal.storyboardOriginalName,
-    );
+    res.redirect(proposal.storyboardUrl);
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -167,8 +143,6 @@ exports.downloadStoryboard = async (req, res) => {
   }
 };
 
-
-// @desc    Editor forward proposal to Board
 
 // @desc    Add a review comment to a proposal
 // @route   PUT /api/series/proposal/:id/comment
@@ -298,9 +272,9 @@ exports.forwardProposal = async (req, res) => {
     // Update status to SENT_TO_EDITORIAL_BOARD so it is visible to the Editorial Board
     proposal.status = "SENT_TO_EDITORIAL_BOARD";
 
-    let comment = null;
+    let commentData = null;
     if (content) {
-      comment = {
+      commentData = {
         authorId: req.user._id,
         authorName: req.user.name,
         authorRole: "editor",
@@ -308,55 +282,31 @@ exports.forwardProposal = async (req, res) => {
         isInternal: false,
         createdAt: new Date(),
       };
-      proposal.comments.push(comment);
+      proposal.comments.push(commentData);
     }
 
     await proposal.save();
 
-    // Automatically create Series stub (initially PENDING) associated with this proposal's Mangaka
-    let series = await Series.findOne({ title: proposal.title, mangakaId: proposal.mangakaId });
-    if (!series) {
-      series = await Series.create({
-        title: proposal.title,
-        synopsis: proposal.synopsis,
-        mangakaId: proposal.mangakaId,
-        status: 'PENDING',
-      });
-    }
-
-    // Automatically create Voting Session (SeriesSubmission) for the Board
-    let submission = await SeriesSubmission.findOne({ seriesId: series._id, submissionType: 'PITCH' });
-    if (!submission) {
-      submission = await SeriesSubmission.create({
-        seriesId: series._id,
-        submissionType: 'PITCH',
-        submittedBy: req.user._id,
-        action: 'APPROVE_WEEKLY',
-        decisionStatus: 'PENDING',
-      });
-      if (req.io) {
-        req.io.emit("submission_submitted", submission);
-      }
-    }
-
-    // Create Notification for the Mangaka
-    const notification = await Notification.create({
-      userId: proposal.mangakaId,
-      title: "Proposal Approved & Forwarded",
-      content: `Your proposal "${proposal.title}" has been approved by your Editor and forwarded to the Editorial Board.`,
-      type: "INFO",
-    });
-
-    if (req.io) {
-      req.io.emit("notification", notification);
-    }
+    await Submission.findOneAndUpdate(
+      { proposalId: proposal._id, submissionType: "PITCH" },
+      {
+        $setOnInsert: {
+          proposalId: proposal._id,
+          submittedBy: req.user._id,
+          submissionType: "PITCH",
+          decisionStatus: "PENDING",
+          requiredVoters: [],
+        },
+      },
+      { new: true, upsert: true, runValidators: true },
+    );
 
     await logAction(
       req.user._id,
       req.user.name || 'Unknown User',
       "Forwarded Proposal to Board",
       `Proposal: ${proposal.title}`,
-      comment ? `Comment: ${comment.content}` : ''
+      commentData ? `Comment: ${commentData.content}` : ''
     );
 
     res.status(200).json({
@@ -393,10 +343,11 @@ exports.rejectProposal = async (req, res) => {
     }
 
     proposal.status = "REJECTED";
+    let commentData = null;
 
     let comment = null;
     if (content) {
-      comment = {
+      commentData = {
         authorId: req.user._id,
         authorName: req.user.name,
         authorRole: "editor",
@@ -404,7 +355,7 @@ exports.rejectProposal = async (req, res) => {
         isInternal: false,
         createdAt: new Date(),
       };
-      proposal.comments.push(comment);
+      proposal.comments.push(commentData);
     }
 
     await proposal.save();
@@ -426,7 +377,7 @@ exports.rejectProposal = async (req, res) => {
       req.user.name || 'Unknown User',
       "Rejected Proposal",
       `Proposal: ${proposal.title}`,
-      comment ? comment.content : ''
+      commentData?.content || ''
     );
 
     res.status(200).json({
@@ -445,7 +396,7 @@ exports.rejectProposal = async (req, res) => {
 // @desc    Mangaka resubmit proposal after revision
 // @route   PUT /api/series/proposal/:id/resubmit
 // @access  MANGAKA only
-const resubmitProposal = async (req, res) => {
+exports.resubmitProposal = async (req, res) => {
   try {
     const proposal = await SeriesProposal.findById(req.params.id);
 
@@ -453,6 +404,13 @@ const resubmitProposal = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Proposal not found",
+      });
+    }
+
+    if (proposal.mangakaId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only resubmit your own proposal",
       });
     }
 
@@ -490,43 +448,6 @@ const resubmitProposal = async (req, res) => {
   }
 };
 
-// @desc    Board sends proposal to editorial board (after tantou approval)
-// @route   PUT /api/series/proposal/:id/send-to-board
-// @access  EDITOR only
-exports.sendToBoard = async (req, res) => {
-  try {
-    const proposal = await SeriesProposal.findById(req.params.id);
-
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: "Proposal not found",
-      });
-    }
-
-    if (proposal.status !== "APPROVED_BY_TANTOU") {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot send to board. Current status: ${proposal.status}`,
-      });
-    }
-
-    proposal.status = "SENT_TO_EDITORIAL_BOARD";
-    await proposal.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Proposal sent to Editorial Board",
-      data: proposal,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
 // @desc    Board approves proposal
 // @route   PUT /api/series/proposal/:id/approve
 // @access  BOARD only
@@ -541,7 +462,31 @@ exports.approveProposal = async (req, res) => {
       });
     }
 
-    if (proposal.status !== "SENT_TO_EDITORIAL_BOARD") {
+    const approvedSubmission = await Submission.findOne({
+      proposalId: proposal._id,
+      submissionType: "PITCH",
+      decisionStatus: "APPROVED",
+    });
+    if (!approvedSubmission) {
+      return res.status(409).json({
+        success: false,
+        message: "Board approval must be completed through the assigned voting session",
+      });
+    }
+    const series = await Series.findOne({ proposalId: proposal._id });
+    if (!series) {
+      return res.status(409).json({
+        success: false,
+        message: "The approved submission has not provisioned its series yet",
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Proposal was approved through board voting",
+      data: proposal,
+    });
+
+    if (proposal.status !== "APPROVED_BY_TANTOU") {
       return res.status(400).json({
         success: false,
         message: `Cannot approve. Current status: ${proposal.status}`,
@@ -577,47 +522,6 @@ exports.approveProposal = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Proposal approved by Editorial Board",
-      data: proposal,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// @desc    Resubmit proposal after revision
-// @route   PUT /api/series/proposal/:id/resubmit
-// @access  MANGAKA only
-exports.resubmitProposal = async (req, res) => {
-  try {
-    const proposal = await SeriesProposal.findById(req.params.id);
-
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: "Proposal not found",
-      });
-    }
-
-    proposal.status = "UNDER_REVIEW";
-
-    const comment = {
-      authorId: req.user._id,
-      authorName: req.user.name,
-      authorRole: "mangaka",
-      content: "Proposal resubmitted after revision.",
-      isInternal: false,
-      createdAt: new Date(),
-    };
-    proposal.comments.push(comment);
-
-    await proposal.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Proposal resubmitted successfully",
       data: proposal,
     });
   } catch (error) {
