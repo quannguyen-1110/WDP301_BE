@@ -227,6 +227,7 @@ exports.getEarnings = async (req, res) => {
 
     const earnings = await AssistantEarning.find(query)
       .populate('approvedPages.pageId', 'pageNumber imageUrl assistantImageUrl')
+      .populate('approvedPages.taskId', 'title')
       .populate('approvedPages.chapterId', 'chapterNumber title')
       .populate('approvedPages.seriesId', 'title')
       .sort({ month: -1 });
@@ -254,6 +255,7 @@ exports.getEarningDetail = async (req, res) => {
       month: req.params.month, // format: "YYYY-MM"
     })
     .populate('approvedPages.pageId', 'pageNumber imageUrl assistantImageUrl')
+    .populate('approvedPages.taskId', 'title')
     .populate('approvedPages.chapterId', 'chapterNumber title')
     .populate('approvedPages.seriesId', 'title');
 
@@ -333,7 +335,9 @@ exports.getIncomeTasks = async (req, res) => {
   try {
     const earnings = await AssistantEarning.find({
       assistantId: req.user._id,
-    }).populate('approvedPages.seriesId', 'title');
+    })
+    .populate('approvedPages.seriesId', 'title')
+    .populate('approvedPages.taskId', 'title');
 
     let totalEarnings = 0;
     let totalCompletedTasks = 0;
@@ -346,8 +350,8 @@ exports.getIncomeTasks = async (req, res) => {
         totalCompletedTasks++;
 
         tasks.push({
-          _id: page.pageId,
-          title: `Approved Page`,
+          _id: page.taskId?._id || page.pageId,
+          title: page.taskId?.title || `Approved Page`,
           series: page.seriesId?.title || 'Unknown',
           approvedAt: page.approvedAt,
           earnings: record.ratePerPage,

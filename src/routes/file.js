@@ -88,29 +88,7 @@ router.post(
   }
 );
 
-/**
- * Get all files (ADMIN + EDITOR + MANGAKA)
- */
-router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA'), getAllFiles);
-
-router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA'), async (req, res) => {
-  try {
-    const files = await File.find()
-      .populate("uploadedBy", "name email role")
-      .populate("chapterId");
-
-    res.status(200).json({
-      success: true,
-      count: files.length,
-      data: files,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
+router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT'), getAllFiles);
 
 /**
  * Download file
@@ -121,53 +99,9 @@ router.get(
   downloadFile,
 );
 
-router.get("/download/:id", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR'), async (req, res) => {
-  try {
-    const file = await File.findById(req.params.id);
-    if (!file) {
-      return res.status(404).json({
-        success: false,
-        message: "File not found",
-      });
-    }
-
-    res.download(file.fileUrl);   // Sửa path nếu cần
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
 /**
  * Get file detail
  */
-router.get("/:id", authorize('ADMIN', 'EDITOR', 'MANGAKA'), getFile);
-
-router.get("/:id", authorize('ADMIN', 'EDITOR', 'MANGAKA'), async (req, res) => {
-  try {
-    const file = await File.findById(req.params.id)
-      .populate("uploadedBy", "name email role")
-      .populate("chapterId");
-
-    if (!file) {
-      return res.status(404).json({
-        success: false,
-        message: "File not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: file,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
+router.get("/:id", authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT'), getFile);
 
 module.exports = router;

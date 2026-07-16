@@ -82,11 +82,13 @@ exports.getSeriesById = async (req, res) => {
     }
 
     const mangakaId = series.mangakaId?._id || series.mangakaId;
+    // BOARD_MEMBER and ADMIN can view any series
     if (
-      (req.user.role === 'MANGAKA' && mangakaId.toString() !== req.user._id.toString()) ||
+      req.user.role !== 'ADMIN' &&
+      req.user.role !== 'BOARD_MEMBER' &&
       (
-        req.user.role === 'EDITOR' &&
-        (!series.editorId || series.editorId.toString() !== req.user._id.toString())
+        (req.user.role === 'MANGAKA' && mangakaId.toString() !== req.user._id.toString()) ||
+        (req.user.role === 'EDITOR' && (!series.editorId || series.editorId.toString() !== req.user._id.toString()))
       )
     ) {
       return res.status(403).json({

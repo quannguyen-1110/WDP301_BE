@@ -4,6 +4,7 @@ const User = require('../models/User.js');
 const Series = require('../models/Series.js');
 const Chapter = require('../models/Chapter.js');
 const AssistantEarning = require('../models/AssistantEarning.js');
+const Notification = require('../models/Notification.js');
 const { logAction } = require('../utils/auditLogger');
 
 exports.createTask = async (req, res) => {
@@ -118,14 +119,30 @@ exports.createTask = async (req, res) => {
       `Series: ${seriesId}, Chapter: ${chapterId}, Assistant: ${assignedTo}, Pages: ${resolvedPageIds.length}`
     );
 
+    // Create Notification for Assistant
+    const notification = await Notification.create({
+      userId: assignedTo,
+      title: 'New Task Assigned',
+      content: `You have been assigned a new task: "${title}".`,
+      type: 'INFO',
+    });
+
     // Realtime Socket
     if (req.io) {
       req.io.emit('task_assigned', task);
+      req.io.emit('notification', notification);
     }
+
+    // Populate for response
+    const populatedTask = await Task.findById(task._id)
+      .populate('seriesId', 'title')
+      .populate('chapterId', 'chapterNumber title')
+      .populate('assignedTo', 'name email')
+      .populate('pageIds');
 
     res.status(201).json({
       success: true,
-      data: task,
+      data: populatedTask,
     });
   } catch (error) {
     res.status(500).json({
@@ -179,8 +196,17 @@ exports.submitTask = async (req, res) => {
       `Series: ${task.seriesId}, Chapter: ${task.chapterId}`
     );
 
+    // Notify Mangaka that Assistant submitted the task
+    const notification = await Notification.create({
+      userId: task.assignedBy,
+      title: 'Task Submitted',
+      content: `Assistant has submitted the task: "${task.title}". Please review it.`,
+      type: 'INFO',
+    });
+
     if (req.io) {
       req.io.emit('task_done', task);
+      req.io.emit('notification', notification);
     }
 
     res.status(200).json({
@@ -331,35 +357,40 @@ exports.reviewTask = async (req, res) => {
         }
       );
 
-      // Assistant earning logic (giữ nguyên)
-      const pagesCount = task.pageIds.length;
-      if (pagesCount > 0) {
-        const now = new Date();
-        const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      // Assistant earning logic
+      const now = new Date();
+      const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-        let earning = await AssistantEarning.findOne({
+      let earning = await AssistantEarning.findOne({
+        assistantId: task.assignedTo,
+        month: monthStr,
+      });
+
+      if (!earning) {
+        earning = new AssistantEarning({
           assistantId: task.assignedTo,
           month: monthStr,
+          totalPagesApproved: 0,
+          ratePerPage: 50000,
+          totalEarning: 0,
+          approvedPages: [],
         });
+      }
 
-        if (!earning) {
-          earning = new AssistantEarning({
-            assistantId: task.assignedTo,
-            month: monthStr,
-            totalPagesApproved: 0,
-            ratePerPage: 50000,
-            totalEarning: 0,
-            approvedPages: [],
-          });
-        }
+      const pagesCount = task.pageIds.length;
+      let addedPagesCount = 0;
 
-        const existingApprovedPageIds = earning.approvedPages.map(ap => ap.pageId.toString());
-        let addedPagesCount = 0;
+      if (pagesCount > 0) {
+        // Calculate based on pages
+        const existingApprovedPageIds = earning.approvedPages
+          .filter(ap => ap.pageId)
+          .map(ap => ap.pageId.toString());
 
         for (const pageId of task.pageIds) {
           if (!existingApprovedPageIds.includes(pageId.toString())) {
             earning.approvedPages.push({
               pageId,
+              taskId: task._id,
               chapterId: task.chapterId,
               seriesId: task.seriesId,
               approvedAt: new Date(),
@@ -367,10 +398,27 @@ exports.reviewTask = async (req, res) => {
             addedPagesCount++;
           }
         }
+      } else {
+        // Calculate based on task itself (treat as 1 work unit equivalent to 1 page)
+        const isTaskAlreadyApproved = earning.approvedPages.some(
+          ap => ap.taskId && ap.taskId.toString() === task._id.toString()
+        );
 
+        if (!isTaskAlreadyApproved) {
+          earning.approvedPages.push({
+            pageId: null,
+            taskId: task._id,
+            chapterId: task.chapterId,
+            seriesId: task.seriesId,
+            approvedAt: new Date(),
+          });
+          addedPagesCount = 1;
+        }
+      }
+
+      if (addedPagesCount > 0) {
         earning.totalPagesApproved += addedPagesCount;
         earning.totalEarning = earning.totalPagesApproved * earning.ratePerPage;
-
         await earning.save();
       }
 
@@ -383,8 +431,17 @@ exports.reviewTask = async (req, res) => {
         `Pages approved: ${task.pageIds.length}, Review: ${reviewNote || 'No note'}`
       );
 
+      // Notify Assistant that task was approved
+      const approveNotification = await Notification.create({
+        userId: task.assignedTo,
+        title: 'Task Approved',
+        content: `Your task "${task.title}" has been approved! ${reviewNote || ''}`,
+        type: 'INFO',
+      });
+
       if (req.io) {
         req.io.emit('task_approved', task);
+        req.io.emit('notification', approveNotification);
       }
     } else {
       task.status = 'REVISION_REQUESTED';
@@ -413,14 +470,53 @@ exports.reviewTask = async (req, res) => {
         `Reason: ${reviewNote || 'No note provided'}`
       );
 
+      // Notify Assistant that revision is requested
+      const revisionNotification = await Notification.create({
+        userId: task.assignedTo,
+        title: 'Task Revision Requested',
+        content: `Your task "${task.title}" needs revision. Reason: ${reviewNote || 'No note provided'}`,
+        type: 'WARNING',
+      });
+
       if (req.io) {
         req.io.emit('task_revision_requested', task);
+        req.io.emit('notification', revisionNotification);
       }
     }
 
     res.status(200).json({
       success: true,
       message: `Task has been ${action === 'APPROVE' ? 'approved' : 'returned for revision'} successfully`,
+      data: task,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get single task by ID
+// @route   GET /api/tasks/:id
+exports.getTaskById = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id)
+      .populate('seriesId', 'title')
+      .populate('chapterId', 'chapterNumber title')
+      .populate('assignedTo', 'name email')
+      .populate('assignedBy', 'name email')
+      .populate('pageIds');
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
       data: task,
     });
   } catch (error) {

@@ -220,6 +220,18 @@ exports.requestRevision = async (req, res) => {
 
     await proposal.save();
 
+    // Create Notification for the Mangaka
+    const notification = await Notification.create({
+      userId: proposal.mangakaId,
+      title: "Revision Requested for Proposal",
+      content: `Editor has requested revision for your proposal "${proposal.title}". Reason: ${content || 'Revision requested'}`,
+      type: "WARNING",
+    });
+
+    if (req.io) {
+      req.io.emit("notification", notification);
+    }
+
     res.status(200).json({
       success: true,
       message: "Revision requested successfully",
@@ -257,7 +269,8 @@ exports.forwardProposal = async (req, res) => {
       });
     }
 
-    proposal.status = "APPROVED_BY_TANTOU";
+    // Update status to SENT_TO_EDITORIAL_BOARD so it is visible to the Editorial Board
+    proposal.status = "SENT_TO_EDITORIAL_BOARD";
 
     let commentData = null;
     if (content) {
@@ -332,6 +345,7 @@ exports.rejectProposal = async (req, res) => {
     proposal.status = "REJECTED";
     let commentData = null;
 
+    let comment = null;
     if (content) {
       commentData = {
         authorId: req.user._id,
@@ -345,6 +359,18 @@ exports.rejectProposal = async (req, res) => {
     }
 
     await proposal.save();
+
+    // Create Notification for the Mangaka
+    const notification = await Notification.create({
+      userId: proposal.mangakaId,
+      title: "Proposal Rejected",
+      content: `Your proposal "${proposal.title}" has been rejected by the Editor.`,
+      type: "WARNING",
+    });
+
+    if (req.io) {
+      req.io.emit("notification", notification);
+    }
 
     await logAction(
       req.user._id,
@@ -480,6 +506,18 @@ exports.approveProposal = async (req, res) => {
     proposal.comments.push(comment);
 
     await proposal.save();
+
+    // Create Notification for the Mangaka
+    const notification = await Notification.create({
+      userId: proposal.mangakaId,
+      title: "Proposal Approved by Board",
+      content: `Congratulations! Your proposal "${proposal.title}" has been approved by the Editorial Board.`,
+      type: "INFO",
+    });
+
+    if (req.io) {
+      req.io.emit("notification", notification);
+    }
 
     res.status(200).json({
       success: true,

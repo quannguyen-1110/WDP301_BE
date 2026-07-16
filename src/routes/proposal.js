@@ -28,7 +28,7 @@ router.post('/', authorize('MANGAKA'), upload.single('storyboard'), createPropos
  * @swagger
  * /api/series/proposal:
  *   get:
- *     summary: Get proposals (optionally filtered by status) (EDITOR only)
+ *     summary: Get proposals (optionally filtered by status)
  *     tags: [Proposals]
  *     security:
  *       - BearerAuth: []
@@ -42,13 +42,13 @@ router.post('/', authorize('MANGAKA'), upload.single('storyboard'), createPropos
  *       200:
  *         description: Return list of proposals
  */
-router.get('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), getProposals);
+router.get('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA'), getProposals);
 
 /**
  * @swagger
  * /api/series/proposal/{id}:
  *   get:
- *     summary: Get a single proposal by ID (EDITOR only)
+ *     summary: Get a single proposal by ID
  *     tags: [Proposals]
  *     security:
  *       - BearerAuth: []
@@ -62,18 +62,18 @@ router.get('/', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), getProposals);
  *       200:
  *         description: Return proposal details
  */
-router.get('/:id', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), getProposalById);
+router.get('/:id', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA'), getProposalById);
 
 /**
  * Download storyboard
  */
-router.get('/:id/storyboard', authorize('ADMIN', 'EDITOR'), downloadStoryboard);
+router.get('/:id/storyboard', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), downloadStoryboard);
 
 /**
  * @swagger
  * /api/series/proposal/{id}/comment:
  *   put:
- *     summary: Add a review comment to a proposal (EDITOR only)
+ *     summary: Add a review comment to a proposal
  *     tags: [Proposals]
  *     security:
  *       - BearerAuth: []
@@ -91,13 +91,13 @@ router.get('/:id/storyboard', authorize('ADMIN', 'EDITOR'), downloadStoryboard);
  *       200:
  *         description: Comment added successfully
  */
-router.put('/:id/comment', authorize('EDITOR', 'BOARD_MEMBER'), addComment);
+router.put('/:id/comment', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'BOARD_MEMBER'), addComment);
 
 /**
  * @swagger
  * /api/series/proposal/{id}/revision:
  *   put:
- *     summary: Request revision for a proposal (EDITOR only)
+ *     summary: Request revision for a proposal (EDITOR/BOARD_MEMBER only)
  *     tags: [Proposals]
  *     security:
  *       - BearerAuth: []
@@ -113,13 +113,13 @@ router.put('/:id/comment', authorize('EDITOR', 'BOARD_MEMBER'), addComment);
  *       200:
  *         description: Revision requested
  */
-router.put('/:id/revision', authorize('EDITOR', 'BOARD_MEMBER'), requestRevision);
+router.put('/:id/revision', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), requestRevision);
 
 /**
  * @swagger
  * /api/series/proposal/{id}/forward:
  *   put:
- *     summary: Forward proposal to the Board (EDITOR only)
+ *     summary: Forward proposal to the Board
  *     tags: [Proposals]
  *     security:
  *       - BearerAuth: []
@@ -135,13 +135,13 @@ router.put('/:id/revision', authorize('EDITOR', 'BOARD_MEMBER'), requestRevision
  *       200:
  *         description: Proposal forwarded successfully
  */
-router.put('/:id/forward', authorize('EDITOR'), forwardProposal);
+router.put('/:id/forward', authorize('ADMIN', 'EDITOR'), forwardProposal);
 
 /**
  * @swagger
  * /api/series/proposal/{id}/reject:
  *   put:
- *     summary: Reject a proposal (EDITOR only)
+ *     summary: Reject a proposal
  *     tags: [Proposals]
  *     security:
  *       - BearerAuth: []
@@ -157,7 +157,7 @@ router.put('/:id/forward', authorize('EDITOR'), forwardProposal);
  *       200:
  *         description: Proposal rejected
  */
-router.put('/:id/reject', authorize('EDITOR', 'BOARD_MEMBER'), rejectProposal);
+router.put('/:id/reject', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), rejectProposal);
 
 /**
  * @swagger
@@ -185,6 +185,6 @@ router.put('/:id/resubmit', authorize('MANGAKA'), resubmitProposal);
  *       200:
  *         description: Proposal approved
  */
-router.put('/:id/approve', authorize('BOARD_MEMBER'), approveProposal);
+router.put('/:id/approve', authorize('ADMIN', 'BOARD_MEMBER'), approveProposal);
 
 module.exports = router;

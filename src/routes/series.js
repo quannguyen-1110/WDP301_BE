@@ -25,7 +25,7 @@ router.get('/', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'BOARD_MEMBER'), getAllS
 /**
  * Lấy chi tiết series
  */
-router.get('/:id', authorize('ADMIN', 'EDITOR', 'MANGAKA'), getSeriesById);
+router.get('/:id', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'BOARD_MEMBER'), getSeriesById);
 
 /**
  * Review series (ADMIN + EDITOR + BOARD_MEMBER)
