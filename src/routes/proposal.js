@@ -67,7 +67,7 @@ router.get('/:id', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), getProposalById
 /**
  * Download storyboard
  */
-router.get('/:id/storyboard', authorize('ADMIN', 'EDITOR'), downloadStoryboard);
+router.get('/:id/storyboard', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), downloadStoryboard);
 
 /**
  * @swagger
