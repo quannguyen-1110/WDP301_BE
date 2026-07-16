@@ -30,7 +30,7 @@ router.post('/', authorize('ADMIN'), createUser);
  *   get:
  *     summary: Get all users (ADMIN & EDITOR)
  */
-router.get('/', authorize('ADMIN', 'EDITOR'), getUsers);
+router.get('/', authorize('ADMIN', 'EDITOR', 'MANGAKA'), getUsers);
 
 /**
  * @swagger

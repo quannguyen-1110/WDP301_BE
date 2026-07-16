@@ -36,7 +36,7 @@ exports.getAllSubmissions = async (req, res) => {
 exports.updateSubmission = async (req, res) => {
   try {
     const submission = await Submission.findByIdAndUpdate(
-      req.params.id,
+      req.params.submissionId,
       req.body,
       {
         new: true,
@@ -57,7 +57,7 @@ exports.updateSubmission = async (req, res) => {
 
 exports.deleteSubmission = async (req, res) => {
   try {
-    const submission = await Submission.findByIdAndDelete(req.params.id);
+    const submission = await Submission.findByIdAndDelete(req.params.submissionId);
     res.status(200).json({
       success: true,
       data: submission,
@@ -72,7 +72,7 @@ exports.deleteSubmission = async (req, res) => {
 
 exports.getSubmissionById = async (req, res) => {
   try {
-    const submission = await Submission.findById(req.params.id);
+    const submission = await Submission.findById(req.params.submissionId);
     res.status(200).json({
       success: true,
       data: submission,

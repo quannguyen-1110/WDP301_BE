@@ -1,5 +1,8 @@
 const Vote = require('../models/Vote.js');
 const Submission = require('../models/SeriesSubmission.js');
+const Series = require('../models/Series.js');
+const SeriesProposal = require('../models/SeriesProposal.js');
+const Notification = require('../models/Notification.js');
 const { logAction } = require('../utils/auditLogger');
 
 exports.submitVote = async (req, res) => {
@@ -59,6 +62,62 @@ exports.submitVote = async (req, res) => {
           acceptCount,
           rejectCount,
         });
+
+        // ===== Notify Mangaka + Update Series/Proposal status =====
+        const series = await Series.findById(submission.seriesId);
+        if (series) {
+          if (newStatus === 'APPROVED') {
+            // Update Series status to ACTIVE
+            series.status = 'ACTIVE';
+            await series.save();
+
+            // Update SeriesProposal status to APPROVED
+            await SeriesProposal.findOneAndUpdate(
+              { title: series.title, mangakaId: series.mangakaId },
+              { status: 'APPROVED' }
+            );
+
+            // Notify Mangaka
+            const approveNotification = await Notification.create({
+              userId: series.mangakaId,
+              title: 'Series Approved by Board!',
+              content: `Congratulations! Your series "${series.title}" has been approved by the Editorial Board and is now ACTIVE.`,
+              type: 'INFO',
+            });
+
+            req.io.emit('notification', approveNotification);
+            req.io.emit('series_approved', {
+              seriesId: series._id,
+              title: series.title,
+              status: 'ACTIVE',
+            });
+          } else {
+            // Update Series status to REJECTED
+            series.status = 'REJECTED';
+            await series.save();
+
+            // Update SeriesProposal status to REJECTED
+            await SeriesProposal.findOneAndUpdate(
+              { title: series.title, mangakaId: series.mangakaId },
+              { status: 'REJECTED' }
+            );
+
+            // Notify Mangaka
+            const rejectNotification = await Notification.create({
+              userId: series.mangakaId,
+              title: 'Series Rejected by Board',
+              content: `Unfortunately, your series "${series.title}" has been rejected by the Editorial Board.`,
+              type: 'WARNING',
+            });
+
+            req.io.emit('notification', rejectNotification);
+            req.io.emit('series_rejected', {
+              seriesId: series._id,
+              title: series.title,
+              status: 'REJECTED',
+            });
+          }
+        }
       }
     }
 

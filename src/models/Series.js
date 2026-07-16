@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // Status thống nhất chung cho toàn team
-const SERIES_STATUS = ['ACTIVE', 'ON_HIATUS', 'IN_PRODUCTION', 'PUBLISHED', 'COMPLETED', 'REJECTED', 'CANCELLED'];
+const SERIES_STATUS = ['ACTIVE', 'ON_HIATUS', 'IN_PRODUCTION', 'PUBLISHED', 'COMPLETED', 'REJECTED', 'CANCELLED', 'PENDING'];
 const PUBLICATION_SCHEDULE = ['WEEKLY', 'MONTHLY'];
 
 const seriesSchema = new mongoose.Schema(

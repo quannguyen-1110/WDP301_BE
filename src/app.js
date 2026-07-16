@@ -58,7 +58,7 @@ const setupApp = (io) => {
   app.use('/api/ranks', protect, rankRoutes);
   app.use('/api/votes', protect, authorize('BOARD_MEMBER'), voteRoutes);
   app.use('/api/submissions', protect, submissionRoutes);
-  app.use('/api/assistant', protect, authorize('ASSISTANT'), assistantRoutes);
+  app.use('/api/assistant', protect, assistantRoutes);
   app.use('/api/annotations', protect, annotationRoutes);
   app.use('/api/editor', protect, authorize('EDITOR'), editorRoutes);
   app.use('/api/defense-reports', protect, defenseReportRoutes);

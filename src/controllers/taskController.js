@@ -2,6 +2,7 @@ const Task = require('../models/Task.js');
 const Page = require('../models/Page.js');
 const User = require('../models/User.js');
 const AssistantEarning = require('../models/AssistantEarning.js');
+const Notification = require('../models/Notification.js');
 const { logAction } = require('../utils/auditLogger');
 
 exports.createTask = async (req, res) => {
@@ -56,14 +57,30 @@ exports.createTask = async (req, res) => {
       `Series: ${seriesId}, Chapter: ${chapterId}, Assistant: ${assignedTo}, Pages: ${pageIds?.length || 0}`
     );
 
+    // Create Notification for Assistant
+    const notification = await Notification.create({
+      userId: assignedTo,
+      title: 'New Task Assigned',
+      content: `You have been assigned a new task: "${title}".`,
+      type: 'INFO',
+    });
+
     // Realtime Socket
     if (req.io) {
       req.io.emit('task_assigned', task);
+      req.io.emit('notification', notification);
     }
+
+    // Populate for response
+    const populatedTask = await Task.findById(task._id)
+      .populate('seriesId', 'title')
+      .populate('chapterId', 'chapterNumber title')
+      .populate('assignedTo', 'name email')
+      .populate('pageIds');
 
     res.status(201).json({
       success: true,
-      data: task,
+      data: populatedTask,
     });
   } catch (error) {
     res.status(500).json({
@@ -113,8 +130,17 @@ exports.submitTask = async (req, res) => {
       `Series: ${task.seriesId}, Chapter: ${task.chapterId}`
     );
 
+    // Notify Mangaka that Assistant submitted the task
+    const notification = await Notification.create({
+      userId: task.assignedBy,
+      title: 'Task Submitted',
+      content: `Assistant has submitted the task: "${task.title}". Please review it.`,
+      type: 'INFO',
+    });
+
     if (req.io) {
       req.io.emit('task_done', task);
+      req.io.emit('notification', notification);
     }
 
     res.status(200).json({
@@ -256,8 +282,17 @@ exports.reviewTask = async (req, res) => {
         `Pages approved: ${task.pageIds.length}, Review: ${reviewNote || 'No note'}`
       );
 
+      // Notify Assistant that task was approved
+      const approveNotification = await Notification.create({
+        userId: task.assignedTo,
+        title: 'Task Approved',
+        content: `Your task "${task.title}" has been approved! ${reviewNote || ''}`,
+        type: 'INFO',
+      });
+
       if (req.io) {
         req.io.emit('task_approved', task);
+        req.io.emit('notification', approveNotification);
       }
     } else {
       task.status = 'REVISION_REQUESTED';
@@ -286,14 +321,53 @@ exports.reviewTask = async (req, res) => {
         `Reason: ${reviewNote || 'No note provided'}`
       );
 
+      // Notify Assistant that revision is requested
+      const revisionNotification = await Notification.create({
+        userId: task.assignedTo,
+        title: 'Task Revision Requested',
+        content: `Your task "${task.title}" needs revision. Reason: ${reviewNote || 'No note provided'}`,
+        type: 'WARNING',
+      });
+
       if (req.io) {
         req.io.emit('task_revision_requested', task);
+        req.io.emit('notification', revisionNotification);
       }
     }
 
     res.status(200).json({
       success: true,
       message: `Task has been ${action === 'APPROVE' ? 'approved' : 'returned for revision'} successfully`,
+      data: task,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get single task by ID
+// @route   GET /api/tasks/:id
+exports.getTaskById = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id)
+      .populate('seriesId', 'title')
+      .populate('chapterId', 'chapterNumber title')
+      .populate('assignedTo', 'name email')
+      .populate('assignedBy', 'name email')
+      .populate('pageIds');
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
       data: task,
     });
   } catch (error) {

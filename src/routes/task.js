@@ -6,7 +6,8 @@ const {
   createTask,
   submitTask,
   getMyTasks,
-  reviewTask
+  reviewTask,
+  getTaskById,
 } = require('../controllers/taskController.js');
 
 // Protect all routes
@@ -29,6 +30,15 @@ router.get(
   '/',
   authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'),
   getMyTasks
+);
+
+/**
+ * Get task by ID
+ */
+router.get(
+  '/:id',
+  authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'),
+  getTaskById
 );
 
 /**

@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const SeriesProposal = require('../models/SeriesProposal');
+const Series = require('../models/Series');
+const SeriesSubmission = require('../models/SeriesSubmission');
+const Notification = require('../models/Notification');
 const { logAction } = require('../utils/auditLogger');
 
 
@@ -243,6 +246,18 @@ exports.requestRevision = async (req, res) => {
 
     await proposal.save();
 
+    // Create Notification for the Mangaka
+    const notification = await Notification.create({
+      userId: proposal.mangakaId,
+      title: "Revision Requested for Proposal",
+      content: `Editor has requested revision for your proposal "${proposal.title}". Reason: ${content || 'Revision requested'}`,
+      type: "WARNING",
+    });
+
+    if (req.io) {
+      req.io.emit("notification", notification);
+    }
+
     res.status(200).json({
       success: true,
       message: "Revision requested successfully",
@@ -280,10 +295,12 @@ exports.forwardProposal = async (req, res) => {
       });
     }
 
-    proposal.status = "APPROVED_BY_TANTOU";
+    // Update status to SENT_TO_EDITORIAL_BOARD so it is visible to the Editorial Board
+    proposal.status = "SENT_TO_EDITORIAL_BOARD";
 
+    let comment = null;
     if (content) {
-      const comment = {
+      comment = {
         authorId: req.user._id,
         authorName: req.user.name,
         authorRole: "editor",
@@ -296,12 +313,50 @@ exports.forwardProposal = async (req, res) => {
 
     await proposal.save();
 
+    // Automatically create Series stub (initially PENDING) associated with this proposal's Mangaka
+    let series = await Series.findOne({ title: proposal.title, mangakaId: proposal.mangakaId });
+    if (!series) {
+      series = await Series.create({
+        title: proposal.title,
+        synopsis: proposal.synopsis,
+        mangakaId: proposal.mangakaId,
+        status: 'PENDING',
+      });
+    }
+
+    // Automatically create Voting Session (SeriesSubmission) for the Board
+    let submission = await SeriesSubmission.findOne({ seriesId: series._id, submissionType: 'PITCH' });
+    if (!submission) {
+      submission = await SeriesSubmission.create({
+        seriesId: series._id,
+        submissionType: 'PITCH',
+        submittedBy: req.user._id,
+        action: 'APPROVE_WEEKLY',
+        decisionStatus: 'PENDING',
+      });
+      if (req.io) {
+        req.io.emit("submission_submitted", submission);
+      }
+    }
+
+    // Create Notification for the Mangaka
+    const notification = await Notification.create({
+      userId: proposal.mangakaId,
+      title: "Proposal Approved & Forwarded",
+      content: `Your proposal "${proposal.title}" has been approved by your Editor and forwarded to the Editorial Board.`,
+      type: "INFO",
+    });
+
+    if (req.io) {
+      req.io.emit("notification", notification);
+    }
+
     await logAction(
       req.user._id,
       req.user.name || 'Unknown User',
       "Forwarded Proposal to Board",
       `Proposal: ${proposal.title}`,
-      comment ? `Comment: ${comment}` : ''
+      comment ? `Comment: ${comment.content}` : ''
     );
 
     res.status(200).json({
@@ -339,8 +394,9 @@ exports.rejectProposal = async (req, res) => {
 
     proposal.status = "REJECTED";
 
+    let comment = null;
     if (content) {
-      const comment = {
+      comment = {
         authorId: req.user._id,
         authorName: req.user.name,
         authorRole: "editor",
@@ -353,12 +409,24 @@ exports.rejectProposal = async (req, res) => {
 
     await proposal.save();
 
+    // Create Notification for the Mangaka
+    const notification = await Notification.create({
+      userId: proposal.mangakaId,
+      title: "Proposal Rejected",
+      content: `Your proposal "${proposal.title}" has been rejected by the Editor.`,
+      type: "WARNING",
+    });
+
+    if (req.io) {
+      req.io.emit("notification", notification);
+    }
+
     await logAction(
       req.user._id,
       req.user.name || 'Unknown User',
       "Rejected Proposal",
       `Proposal: ${proposal.title}`,
-      comment || ''
+      comment ? comment.content : ''
     );
 
     res.status(200).json({
@@ -493,6 +561,18 @@ exports.approveProposal = async (req, res) => {
     proposal.comments.push(comment);
 
     await proposal.save();
+
+    // Create Notification for the Mangaka
+    const notification = await Notification.create({
+      userId: proposal.mangakaId,
+      title: "Proposal Approved by Board",
+      content: `Congratulations! Your proposal "${proposal.title}" has been approved by the Editorial Board.`,
+      type: "INFO",
+    });
+
+    if (req.io) {
+      req.io.emit("notification", notification);
+    }
 
     res.status(200).json({
       success: true,

@@ -57,7 +57,7 @@ router.post(
 /**
  * Get all files (ADMIN + EDITOR + MANGAKA)
  */
-router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA'), async (req, res) => {
+router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT'), async (req, res) => {
   try {
     const files = await File.find()
       .populate("uploadedBy", "name email role")
@@ -101,7 +101,7 @@ router.get("/download/:id", authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR')
 /**
  * Get file detail
  */
-router.get("/:id", authorize('ADMIN', 'EDITOR', 'MANGAKA'), async (req, res) => {
+router.get("/:id", authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT'), async (req, res) => {
   try {
     const file = await File.findById(req.params.id)
       .populate("uploadedBy", "name email role")
