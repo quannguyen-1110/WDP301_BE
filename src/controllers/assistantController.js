@@ -3,6 +3,7 @@ const Page = require('../models/Page.js');
 const AssistantEarning = require('../models/AssistantEarning.js');
 const Series = require('../models/Series.js');
 const User = require('../models/User.js');
+const { generateAssistantPageArt } = require('../services/assistantJobService.js');
 
 // @desc    Get current assistant's assigned tasks
 // @route   GET /api/assistant/my-tasks
@@ -139,12 +140,40 @@ exports.submitTask = async (req, res) => {
       _id: req.params.taskId,
       assignedTo: req.user._id,
       status: { $in: ['PENDING', 'IN_PROGRESS', 'REVISION_REQUESTED', 'REVISING'] },
-    });
+    }).populate('pageIds');
 
     if (!task) {
       return res.status(404).json({
         success: false,
         message: 'Task not found or not assigned to you',
+      });
+    }
+
+    // ======== BACKEND AUTO: download -> crop -> upload -> set assistantImageUrl ========
+    // This fixes the "assistant did not upload/down images for mangaka" flow.
+    const pages = task.pageIds || [];
+
+    const resultsByPageId = await generateAssistantPageArt({
+      task,
+      pages,
+      regionType: 'regions',
+    });
+
+    // Update each page with assistantImageUrl
+    let updatedCount = 0;
+    for (const page of pages) {
+      const newUrl = resultsByPageId[String(page._id)];
+      if (!newUrl) continue;
+      page.assistantImageUrl = newUrl;
+      page.status = 'COMPLETED';
+      await page.save();
+      updatedCount++;
+    }
+
+    if (updatedCount !== pages.length) {
+      return res.status(400).json({
+        success: false,
+        message: `Not all pages were processed successfully. updated=${updatedCount}, total=${pages.length}`,
       });
     }
 
