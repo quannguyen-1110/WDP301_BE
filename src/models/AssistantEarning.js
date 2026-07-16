@@ -27,6 +27,10 @@ const assistantEarningSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Page',
     },
+    taskId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Task',
+    },
     chapterId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Chapter',

@@ -230,35 +230,40 @@ exports.reviewTask = async (req, res) => {
         }
       );
 
-      // Assistant earning logic (giữ nguyên)
-      const pagesCount = task.pageIds.length;
-      if (pagesCount > 0) {
-        const now = new Date();
-        const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      // Assistant earning logic
+      const now = new Date();
+      const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-        let earning = await AssistantEarning.findOne({
+      let earning = await AssistantEarning.findOne({
+        assistantId: task.assignedTo,
+        month: monthStr,
+      });
+
+      if (!earning) {
+        earning = new AssistantEarning({
           assistantId: task.assignedTo,
           month: monthStr,
+          totalPagesApproved: 0,
+          ratePerPage: 50000,
+          totalEarning: 0,
+          approvedPages: [],
         });
+      }
 
-        if (!earning) {
-          earning = new AssistantEarning({
-            assistantId: task.assignedTo,
-            month: monthStr,
-            totalPagesApproved: 0,
-            ratePerPage: 50000,
-            totalEarning: 0,
-            approvedPages: [],
-          });
-        }
+      const pagesCount = task.pageIds.length;
+      let addedPagesCount = 0;
 
-        const existingApprovedPageIds = earning.approvedPages.map(ap => ap.pageId.toString());
-        let addedPagesCount = 0;
+      if (pagesCount > 0) {
+        // Calculate based on pages
+        const existingApprovedPageIds = earning.approvedPages
+          .filter(ap => ap.pageId)
+          .map(ap => ap.pageId.toString());
 
         for (const pageId of task.pageIds) {
           if (!existingApprovedPageIds.includes(pageId.toString())) {
             earning.approvedPages.push({
               pageId,
+              taskId: task._id,
               chapterId: task.chapterId,
               seriesId: task.seriesId,
               approvedAt: new Date(),
@@ -266,10 +271,27 @@ exports.reviewTask = async (req, res) => {
             addedPagesCount++;
           }
         }
+      } else {
+        // Calculate based on task itself (treat as 1 work unit equivalent to 1 page)
+        const isTaskAlreadyApproved = earning.approvedPages.some(
+          ap => ap.taskId && ap.taskId.toString() === task._id.toString()
+        );
 
+        if (!isTaskAlreadyApproved) {
+          earning.approvedPages.push({
+            pageId: null,
+            taskId: task._id,
+            chapterId: task.chapterId,
+            seriesId: task.seriesId,
+            approvedAt: new Date(),
+          });
+          addedPagesCount = 1;
+        }
+      }
+
+      if (addedPagesCount > 0) {
         earning.totalPagesApproved += addedPagesCount;
         earning.totalEarning = earning.totalPagesApproved * earning.ratePerPage;
-
         await earning.save();
       }
 
