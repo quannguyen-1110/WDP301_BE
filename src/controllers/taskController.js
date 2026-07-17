@@ -22,17 +22,30 @@ exports.createTask = async (req, res) => {
       sourceImageUrl,
     } = req.body;
 
+    // DEBUG: Log incoming request body
+    console.log('[createTask] req.body =>', JSON.stringify({
+      seriesId, chapterId, assignedTo, title, sourceImageUrl,
+      pageIds, regions: regions?.length, region: !!region
+    }));
+
     // Validate assignedTo user role
     const assistant = await User.findById(assignedTo);
 
     if (!assistant || assistant.role !== 'ASSISTANT' || assistant.isActive === false || assistant.deletedAt) {
+      console.log('[createTask] FAIL: assistant check. assistant =>', assistant?._id, assistant?.role, assistant?.isActive);
       return res.status(400).json({
         success: false,
         message: 'Assigned user must be an ASSISTANT',
       });
     }
+
+    // DEBUG: Check what's in the database for this chapter
+    const chapterById = await Chapter.findById(chapterId);
+    console.log('[createTask] chapterById =>', chapterById?._id, 'chapter.seriesId =>', chapterById?.seriesId?.toString(), 'requested seriesId =>', seriesId);
+
     const chapter = await Chapter.findOne({ _id: chapterId, seriesId });
     if (!chapter) {
+      console.log('[createTask] FAIL: chapter does not belong to series. chapterId =>', chapterId, 'seriesId =>', seriesId);
       return res.status(400).json({
         success: false,
         message: 'Chapter does not belong to the selected series',
@@ -52,15 +65,14 @@ exports.createTask = async (req, res) => {
 
     const resolvedPageIds = Array.isArray(pageIds) ? [...pageIds] : [];
     if (resolvedPageIds.length === 0 && sourceImageUrl) {
-    if (
-      sourceImageUrl &&
-      !/^\/uploads\/[A-Za-z0-9._-]+$/.test(sourceImageUrl)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid source image URL',
-      });
-    }
+      const isRelativeUpload = /^\/?(src\/)?uploads[/\\][A-Za-z0-9._-]+$/.test(sourceImageUrl);
+      const isRemoteUrl = /^https?:\/\//.test(sourceImageUrl);
+      if (sourceImageUrl && !isRelativeUpload && !isRemoteUrl) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid source image URL',
+        });
+      }
 
       const latestPage = await Page.findOne({ chapterId }).sort({ pageNumber: -1 });
       const page = await Page.create({
@@ -90,6 +102,8 @@ exports.createTask = async (req, res) => {
       });
     }
 
+    const taskDueAt = dueAt ? new Date(dueAt) : (chapter.dueAt || new Date(Date.now() + 3 * 24 * 3600 * 1000));
+
     const task = await Task.create({
       seriesId,
       chapterId,
@@ -98,7 +112,7 @@ exports.createTask = async (req, res) => {
       title,
       description,
       pageIds: resolvedPageIds,
-      dueAt,
+      dueAt: taskDueAt,
       regions: regions || (region ? [region] : []),
     });
 
@@ -298,54 +312,18 @@ exports.reviewTask = async (req, res) => {
         message: 'You can only review tasks for your assigned series',
       });
     }
-    if (!['SUBMITTED', 'MANGAKA_APPROVED'].includes(task.status)) {
+    if (!['SUBMITTED', 'MANGAKA_APPROVED', 'PENDING_REVIEW'].includes(task.status)) {
       return res.status(400).json({
         success: false,
         message: `Task cannot be reviewed from status ${task.status}`,
       });
     }
 
-    if (action === 'APPROVE' && req.user.role === 'MANGAKA') {
-      task.status = 'MANGAKA_APPROVED';
-      task.reviewedAt = new Date();
-      task.reviewNote = reviewNote || 'Approved by mangaka; awaiting editor approval';
-      await task.save();
-
-      await Page.updateMany(
-        { _id: { $in: task.pageIds }, status: { $ne: 'APPROVED' } },
-        {
-          status: 'COMPLETED',
-          reviewNote: task.reviewNote,
-        },
-      );
-      await logAction(
-        req.user._id,
-        req.user.name || 'Unknown',
-        'Mangaka Approved Task',
-        `Task: ${task.title}`,
-        `Awaiting editor approval. Review: ${reviewNote || 'No note'}`,
-      );
-      if (req.io) req.io.emit('task_mangaka_approved', task);
-      return res.status(200).json({
-        success: true,
-        message: 'Task approved by mangaka and sent to editor',
-        data: task,
-      });
-    }
-
-    if (action === 'APPROVE' && req.user.role === 'EDITOR' && task.status !== 'MANGAKA_APPROVED') {
-      return res.status(400).json({
-        success: false,
-        message: 'Mangaka approval is required before editor approval',
-      });
-    }
-
 
     if (action === 'APPROVE') {
-      task.status = 'APPROVED';
+      task.status = 'MANGAKA_APPROVED';
       task.reviewedAt = new Date();
-      task.reviewNote = reviewNote || 'Final approval';
-
+      task.reviewNote = reviewNote || 'Approved by Mangaka';
       await task.save();
 
       await Page.updateMany(

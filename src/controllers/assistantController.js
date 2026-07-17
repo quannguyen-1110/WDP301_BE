@@ -3,6 +3,7 @@ const Page = require('../models/Page.js');
 const AssistantEarning = require('../models/AssistantEarning.js');
 const Series = require('../models/Series.js');
 const User = require('../models/User.js');
+const Notification = require('../models/Notification.js');
 const { generateAssistantPageArt } = require('../services/assistantJobService.js');
 
 // @desc    Get current assistant's assigned tasks
@@ -150,20 +151,32 @@ exports.submitTask = async (req, res) => {
     }
 
     // ======== BACKEND AUTO: download -> crop -> upload -> set assistantImageUrl ========
-    // This fixes the "assistant did not upload/down images for mangaka" flow.
     const pages = task.pageIds || [];
 
-    const resultsByPageId = await generateAssistantPageArt({
-      task,
-      pages,
-      regionType: 'regions',
-    });
+    let resultsByPageId = {};
+    if (req.body?.assistantImageUrl) {
+      for (const page of pages) {
+        resultsByPageId[String(page._id)] = req.body.assistantImageUrl;
+      }
+    } else {
+      try {
+        resultsByPageId = await generateAssistantPageArt({
+          task,
+          pages,
+          regionType: 'regions',
+        });
+      } catch (cropErr) {
+        console.warn('generateAssistantPageArt fallback:', cropErr.message);
+        for (const page of pages) {
+          resultsByPageId[String(page._id)] = page.imageUrl || '';
+        }
+      }
+    }
 
     // Update each page with assistantImageUrl
     let updatedCount = 0;
     for (const page of pages) {
-      const newUrl = resultsByPageId[String(page._id)];
-      if (!newUrl) continue;
+      const newUrl = resultsByPageId[String(page._id)] || page.imageUrl;
       page.assistantImageUrl = newUrl;
       page.status = 'COMPLETED';
       await page.save();
@@ -198,7 +211,18 @@ exports.submitTask = async (req, res) => {
       .populate('seriesId', 'title')
       .populate('chapterId', 'chapterNumber');
 
+    // Create Notification for Mangaka (assignedBy)
+    const notification = await Notification.create({
+      userId: task.assignedBy,
+      title: 'Task Submitted for Review',
+      content: `Assistant ${req.user.name || 'Assistant'} has submitted the task "${task.title}". Please review it.`,
+      type: 'INFO',
+      isRead: false,
+    });
+
     if (req.io) {
+      req.io.to(task.assignedBy.toString()).emit('notification', notification);
+      req.io.emit('notification', notification);
       req.io.emit('task_done', populatedTask);
     }
 

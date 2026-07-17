@@ -34,17 +34,32 @@ const uploadBufferToCloudinary = async ({ buffer, publicId, folder }) => {
 };
 
 const downloadImageToBuffer = async (url) => {
-  const resp = await axios.get(url, { responseType: 'arraybuffer' });
-  return Buffer.from(resp.data);
+  if (url.startsWith('http')) {
+    const resp = await axios.get(url, { responseType: 'arraybuffer' });
+    return Buffer.from(resp.data);
+  } else {
+    // Relative path. E.g. "/uploads/filename.png" or "uploads/filename.png"
+    const filename = path.basename(url);
+    const localPath = path.join(process.cwd(), 'src', 'uploads', filename);
+    if (!fs.existsSync(localPath)) {
+      throw new Error(`Local file not found at ${localPath}`);
+    }
+    return fs.readFileSync(localPath);
+  }
 };
 
 const clampRegion = (region, imgWidth, imgHeight) => {
-  const x = Math.max(0, Math.floor(region.x));
-  const y = Math.max(0, Math.floor(region.y));
-  const width = Math.min(imgWidth - x, Math.floor(region.width));
-  const height = Math.min(imgHeight - y, Math.floor(region.height));
-  if (width <= 0 || height <= 0) return null;
-  return { x, y, width, height };
+  const pctX = region.x ?? 0;
+  const pctY = region.y ?? 0;
+  const pctW = region.width ?? 0;
+  const pctH = region.height ?? 0;
+
+  const left = Math.max(0, Math.floor((pctX / 100) * imgWidth));
+  const top = Math.max(0, Math.floor((pctY / 100) * imgHeight));
+  const width = Math.max(1, Math.min(imgWidth - left, Math.floor((pctW / 100) * imgWidth)));
+  const height = Math.max(1, Math.min(imgHeight - top, Math.floor((pctH / 100) * imgHeight)));
+
+  return { left, top, width, height };
 };
 
 /**
@@ -95,10 +110,10 @@ exports.generateAssistantPageArt = async ({ task, pages, regionType = 'regions' 
         .filter(Boolean);
       if (clamped.length === 0) throw new Error(`Invalid regions for page ${page._id}`);
 
-      const left = Math.min(...clamped.map(r => r.x));
-      const top = Math.min(...clamped.map(r => r.y));
-      const right = Math.max(...clamped.map(r => r.x + r.width));
-      const bottom = Math.max(...clamped.map(r => r.y + r.height));
+      const left = Math.min(...clamped.map(r => r.left));
+      const top = Math.min(...clamped.map(r => r.top));
+      const right = Math.max(...clamped.map(r => r.left + r.width));
+      const bottom = Math.max(...clamped.map(r => r.top + r.height));
 
       const unionW = right - left;
       const unionH = bottom - top;
@@ -110,16 +125,16 @@ exports.generateAssistantPageArt = async ({ task, pages, regionType = 'regions' 
       const composites = await Promise.all(
         clamped.map(async (r) => {
           const regionBuf = await sharp(srcBuffer).extract({
-            left: r.x,
-            top: r.y,
+            left: r.left,
+            top: r.top,
             width: r.width,
             height: r.height,
           }).png().toBuffer();
 
           return {
             input: regionBuf,
-            left: r.x - left,
-            top: r.y - top,
+            left: r.left - left,
+            top: r.top - top,
           };
         })
       );

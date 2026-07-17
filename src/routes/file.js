@@ -55,10 +55,14 @@ router.post(
         }
       }
 
+      const fileUrl = req.file.path.startsWith('http')
+        ? req.file.path
+        : `/uploads/${req.file.filename}`;
+
       const newFile = await File.create({
         fileName: req.file.filename,
         originalName: req.file.originalname,
-        fileUrl: req.file.path,
+        fileUrl,
         cloudinaryPublicId: req.file.filename,
         uploadedBy: req.user._id,
         roleUploaded: req.user.role,

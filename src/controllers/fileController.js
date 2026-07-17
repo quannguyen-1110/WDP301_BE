@@ -43,10 +43,14 @@ exports.uploadFile = async (req, res) => {
       });
     }
 
+    const fileUrl = req.file.path.startsWith('http')
+      ? req.file.path
+      : `/uploads/${req.file.filename}`;
+
     const newFile = await File.create({
       fileName: req.file.filename,
       originalName: req.file.originalname,
-      fileUrl: req.file.path,
+      fileUrl,
 
       uploadedBy: req.user?._id,
       roleUploaded: req.user?.role,

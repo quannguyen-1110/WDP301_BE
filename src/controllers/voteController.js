@@ -40,14 +40,15 @@ const finalizeProposal = async (req, submission, decision, decidedBy) => {
 
       // Notify Mangaka
       const approveNotification = await Notification.create({
-        userId: series.mangakaId,
+        userId: proposal.mangakaId,
         title: 'Series Approved by Board!',
-        content: `Congratulations! Your series "${series.title}" has been approved by the Editorial Board and is now ACTIVE.`,
+        content: `Congratulations! Your series "${proposal.title}" has been approved by the Editorial Board and is now ACTIVE.`,
         type: 'INFO',
       });
 
       if (req.io) {
         req.io.emit('notification', approveNotification);
+        req.io.to(proposal.mangakaId.toString()).emit('notification', approveNotification);
         req.io.emit('series_approved', {
           seriesId: series._id,
           title: series.title,
@@ -67,23 +68,23 @@ const finalizeProposal = async (req, submission, decision, decidedBy) => {
         { $set: { status: 'REJECTED' } },
         { new: true }
       );
-      if (series) {
-        // Notify Mangaka
-        const rejectNotification = await Notification.create({
-          userId: series.mangakaId,
-          title: 'Series Rejected by Board',
-          content: `Unfortunately, your series "${series.title}" has been rejected by the Editorial Board.`,
-          type: 'WARNING',
-        });
 
-        if (req.io) {
-          req.io.emit('notification', rejectNotification);
-          req.io.emit('series_rejected', {
-            seriesId: series._id,
-            title: series.title,
-            status: 'REJECTED',
-          });
-        }
+      // Notify Mangaka
+      const rejectNotification = await Notification.create({
+        userId: proposal.mangakaId,
+        title: 'Series Rejected by Board',
+        content: `Unfortunately, your series "${proposal.title}" has been rejected by the Editorial Board.`,
+        type: 'WARNING',
+      });
+
+      if (req.io) {
+        req.io.emit('notification', rejectNotification);
+        req.io.to(proposal.mangakaId.toString()).emit('notification', rejectNotification);
+        req.io.emit('series_rejected', {
+          seriesId: series ? series._id : null,
+          title: proposal.title,
+          status: 'REJECTED',
+        });
       }
     }
   }
