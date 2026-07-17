@@ -187,16 +187,10 @@ exports.updateChapter = async (req, res) => {
 
     if (req.body.status === "SENT_TO_EDITORIAL") {
       const tasks = await Task.find({ chapterId: req.params.id }).select("status");
-      if (tasks.length === 0) {
+      if (tasks.length > 0 && tasks.some((task) => !["APPROVED", "MANGAKA_APPROVED", "COMPLETED"].includes(task.status))) {
         return res.status(400).json({
           success: false,
-          message: "A chapter must have tasks before editorial approval",
-        });
-      }
-      if (tasks.some((task) => task.status !== "APPROVED")) {
-        return res.status(400).json({
-          success: false,
-          message: "All tasks require final editor approval first",
+          message: "All tasks in this chapter must be approved first",
         });
       }
     }
