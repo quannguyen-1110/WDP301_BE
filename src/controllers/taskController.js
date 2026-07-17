@@ -320,22 +320,71 @@ exports.reviewTask = async (req, res) => {
     }
 
 
-    if (action === 'APPROVE') {
+    if (action === 'APPROVE' && req.user.role === 'MANGAKA') {
       task.status = 'MANGAKA_APPROVED';
       task.reviewedAt = new Date();
-      task.reviewNote = reviewNote || 'Approved by Mangaka';
+      task.reviewNote = reviewNote || 'Approved by Mangaka (Round 1)';
+      await task.save();
+
+      await Page.updateMany(
+        { _id: { $in: task.pageIds }, status: { $ne: 'APPROVED' } },
+        {
+          status: 'COMPLETED',
+          reviewNote: task.reviewNote,
+        }
+      );
+
+      await logAction(
+        req.user._id,
+        req.user.name || 'Unknown',
+        'Mangaka Approved Task',
+        `Task: ${task.title}`,
+        `Awaiting final Editor approval. Review: ${reviewNote || 'No note'}`
+      );
+
+      const approveNotification = await Notification.create({
+        userId: task.assignedTo,
+        title: 'Task Approved by Mangaka (Round 1)',
+        content: `Your task "${task.title}" has been approved by Mangaka and sent for Editor final review.`,
+        type: 'INFO',
+      });
+
+      if (req.io) {
+        req.io.emit('task_mangaka_approved', task);
+        req.io.emit('notification', approveNotification);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Task approved by Mangaka (Round 1); awaiting Editor approval',
+        data: task,
+      });
+    }
+
+    if (action === 'APPROVE' && (req.user.role === 'EDITOR' || req.user.role === 'ADMIN')) {
+      if (task.status !== 'MANGAKA_APPROVED') {
+        return res.status(400).json({
+          success: false,
+          message: 'Mangaka approval (Round 1) is required before Editor final approval',
+        });
+      }
+
+      task.status = 'APPROVED';
+      task.reviewedAt = new Date();
+      task.reviewNote = reviewNote || 'Final approval by Editor';
+
       await task.save();
 
       await Page.updateMany(
         { _id: { $in: task.pageIds } },
         {
           status: 'APPROVED',
-          reviewNote: reviewNote || 'Approved by author',
+          reviewNote: reviewNote || 'Approved by Editor',
           approvedAt: new Date(),
         }
       );
 
-      // Assistant earning logic
+      // Assistant earning logic - ONLY calculated upon Editor Final Approval!
       const now = new Date();
       const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -409,11 +458,11 @@ exports.reviewTask = async (req, res) => {
         `Pages approved: ${task.pageIds.length}, Review: ${reviewNote || 'No note'}`
       );
 
-      // Notify Assistant that task was approved
+      // Notify Assistant that task was final approved
       const approveNotification = await Notification.create({
         userId: task.assignedTo,
-        title: 'Task Approved',
-        content: `Your task "${task.title}" has been approved! ${reviewNote || ''}`,
+        title: 'Task Final Approved by Editor',
+        content: `Your task "${task.title}" has received final approval from Editor! Earnings recorded. ${reviewNote || ''}`,
         type: 'INFO',
       });
 
@@ -421,10 +470,18 @@ exports.reviewTask = async (req, res) => {
         req.io.emit('task_approved', task);
         req.io.emit('notification', approveNotification);
       }
-    } else {
+
+      return res.status(200).json({
+        success: true,
+        message: 'Task received final approval from Editor',
+        data: task,
+      });
+    }
+
+    if (action === 'REVISION_REQUESTED' || action === 'REJECT') {
       task.status = 'REVISION_REQUESTED';
       task.reviewedAt = new Date();
-      task.reviewNote = reviewNote || 'Revision requested by author';
+      task.reviewNote = reviewNote || 'Revision requested';
 
       await task.save();
 
@@ -435,24 +492,14 @@ exports.reviewTask = async (req, res) => {
         },
         {
           status: 'REVISION_REQUESTED',
-          reviewNote: reviewNote || 'Revision requested by author',
+          reviewNote: task.reviewNote,
         }
       );
 
-      // ==================== AUDIT LOG ====================
-      await logAction(
-        req.user._id,
-        req.user.name || 'Unknown',
-        "Requested Task Revision",
-        `Task: ${task.title}`,
-        `Reason: ${reviewNote || 'No note provided'}`
-      );
-
-      // Notify Assistant that revision is requested
       const revisionNotification = await Notification.create({
         userId: task.assignedTo,
         title: 'Task Revision Requested',
-        content: `Your task "${task.title}" needs revision. Reason: ${reviewNote || 'No note provided'}`,
+        content: `Revision requested for task "${task.title}": ${reviewNote || 'Please update and resubmit'}`,
         type: 'WARNING',
       });
 
@@ -460,6 +507,12 @@ exports.reviewTask = async (req, res) => {
         req.io.emit('task_revision_requested', task);
         req.io.emit('notification', revisionNotification);
       }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Revision requested successfully',
+        data: task,
+      });
     }
 
     res.status(200).json({

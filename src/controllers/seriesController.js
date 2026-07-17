@@ -1,4 +1,5 @@
 const Series = require('../models/Series');
+const Notification = require('../models/Notification');
 const { logAction } = require('../utils/auditLogger');
 
 // @desc    Create new series
@@ -207,6 +208,18 @@ exports.updateSeriesStatus = async (req, res) => {
       `Series: ${series.title}`,
       `New status: ${status}`
     );
+
+    // Send Notification to Mangaka & Editor for Board decision on Series status
+    const recipients = [series.mangakaId, series.editorId].filter(Boolean);
+    for (const userId of recipients) {
+      const notif = await Notification.create({
+        userId,
+        title: `Editorial Board Decision: Series ${status}`,
+        content: `The status of series "${series.title}" has been updated to ${status}.`,
+        type: status === 'CANCELLED' ? 'WARNING' : 'INFO',
+      });
+      if (req.io) req.io.to(userId.toString()).emit('notification', notif);
+    }
 
     res.status(200).json({
       success: true,

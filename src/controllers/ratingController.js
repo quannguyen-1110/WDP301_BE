@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Rating = require('../models/Rating');
 const Ranking = require('../models/Ranking');
 const Series = require('../models/Series');
+const Notification = require('../models/Notification');
 const { logAction } = require('../utils/auditLogger');
 
 const MAX_IMPORT_ENTRIES = 500;
@@ -180,6 +181,8 @@ const recalculateRanking = async (cycle, periodStart, periodEnd) => {
     ]);
     const prevRank = previousCycleRank?.rank ?? existingCurrent?.prevRank ?? null;
 
+    const trend = computeTrend(newRank, prevRank);
+
     await Ranking.findOneAndUpdate(
       {
         seriesId: score._id,
@@ -192,7 +195,7 @@ const recalculateRanking = async (cycle, periodStart, periodEnd) => {
           prevRank,
           votes: score.totalVotes,
           ratingScore: Number((score.averageRatingScore || 0).toFixed(2)),
-          trend: computeTrend(newRank, prevRank),
+          trend,
           cycleEnd: new Date(periodEnd),
         },
         $setOnInsert: {
@@ -203,6 +206,21 @@ const recalculateRanking = async (cycle, periodStart, periodEnd) => {
       },
       { upsert: true, new: true, runValidators: true },
     );
+
+    if (trend === 'down') {
+      const seriesDoc = await Series.findById(score._id).select('title mangakaId editorId');
+      if (seriesDoc) {
+        const recipients = [seriesDoc.mangakaId, seriesDoc.editorId].filter(Boolean);
+        for (const userId of recipients) {
+          await Notification.create({
+            userId,
+            title: 'Series Ranking Dropped',
+            content: `Series "${seriesDoc.title}" rank dropped from #${prevRank} to #${newRank} (${rankingCycle} cycle). Please review production plan.`,
+            type: 'WARNING',
+          });
+        }
+      }
+    }
   }
 };
 
