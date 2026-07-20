@@ -1,8 +1,9 @@
-const SeriesProposal = require('../models/SeriesProposal');
-const Submission = require('../models/SeriesSubmission');
-const Series = require('../models/Series');
-const { logAction } = require('../utils/auditLogger');
-
+const SeriesProposal = require("../models/SeriesProposal");
+const Submission = require("../models/SeriesSubmission");
+const Series = require("../models/Series");
+const { logAction } = require("../utils/auditLogger");
+const { cloudinary } = require("../config/cloudinary");
+const axios = require("axios");
 
 // @desc    Submit proposal + storyboard file upload (Cloudinary)
 // @route   POST /api/series/proposal
@@ -31,10 +32,10 @@ exports.createProposal = async (req, res) => {
     // Ghi Audit Log
     await logAction(
       req.user._id,
-      req.user.name || 'Unknown User',
+      req.user.name || "Unknown User",
       "Created Series Proposal",
       `Title: ${title}`,
-      `Genre: ${genre}`
+      `Genre: ${genre}`,
     );
 
     res.status(201).json({
@@ -93,8 +94,10 @@ exports.getProposals = async (req, res) => {
 // @access  EDITOR only
 exports.getProposalById = async (req, res) => {
   try {
-    const proposal = await SeriesProposal.findById(req.params.id)
-      .populate("mangakaId", "name email");
+    const proposal = await SeriesProposal.findById(req.params.id).populate(
+      "mangakaId",
+      "name email",
+    );
 
     if (!proposal) {
       return res.status(404).json({
@@ -115,7 +118,7 @@ exports.getProposalById = async (req, res) => {
   }
 };
 
-// @desc    Download storyboard file (redirects to Cloudinary URL)
+// @desc    Download storyboard file (proxied through backend)
 exports.downloadStoryboard = async (req, res) => {
   try {
     const proposal = await SeriesProposal.findById(req.params.id);
@@ -134,15 +137,26 @@ exports.downloadStoryboard = async (req, res) => {
       });
     }
 
-    res.redirect(proposal.storyboardUrl);
+    // Fetch the actual file from Cloudinary
+    const response = await axios.get(proposal.storyboardUrl, {
+      responseType: "stream",
+    });
+
+    // Set headers for file download
+    const originalName = "storyboard";
+    res.setHeader("Content-Type", response.headers["content-type"] || "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${originalName}"`);
+
+    // Pipe the file stream directly to the client
+    response.data.pipe(res);
   } catch (error) {
+    console.error("Download error:", error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to download storyboard",
     });
   }
 };
-
 
 // @desc    Add a review comment to a proposal
 // @route   PUT /api/series/proposal/:id/comment
@@ -199,7 +213,11 @@ exports.requestRevision = async (req, res) => {
       });
     }
 
-    if (proposal.status !== "SUBMITTED" && proposal.status !== "UNDER_REVIEW" && proposal.status !== "RESUBMITTED") {
+    if (
+      proposal.status !== "SUBMITTED" &&
+      proposal.status !== "UNDER_REVIEW" &&
+      proposal.status !== "RESUBMITTED"
+    ) {
       return res.status(400).json({
         success: false,
         message: `Cannot request revision for proposal with status: ${proposal.status}`,
@@ -224,7 +242,7 @@ exports.requestRevision = async (req, res) => {
     const notification = await Notification.create({
       userId: proposal.mangakaId,
       title: "Revision Requested for Proposal",
-      content: `Editor has requested revision for your proposal "${proposal.title}". Reason: ${content || 'Revision requested'}`,
+      content: `Editor has requested revision for your proposal "${proposal.title}". Reason: ${content || "Revision requested"}`,
       type: "WARNING",
     });
 
@@ -262,7 +280,11 @@ exports.forwardProposal = async (req, res) => {
       });
     }
 
-    if (proposal.status !== "SUBMITTED" && proposal.status !== "UNDER_REVIEW" && proposal.status !== "RESUBMITTED") {
+    if (
+      proposal.status !== "SUBMITTED" &&
+      proposal.status !== "UNDER_REVIEW" &&
+      proposal.status !== "RESUBMITTED"
+    ) {
       return res.status(400).json({
         success: false,
         message: `Cannot forward proposal with status: ${proposal.status}`,
@@ -303,15 +325,16 @@ exports.forwardProposal = async (req, res) => {
 
     await logAction(
       req.user._id,
-      req.user.name || 'Unknown User',
+      req.user.name || "Unknown User",
       "Forwarded Proposal to Board",
       `Proposal: ${proposal.title}`,
-      commentData ? `Comment: ${commentData.content}` : ''
+      commentData ? `Comment: ${commentData.content}` : "",
     );
 
     res.status(200).json({
       success: true,
-      message: "Proposal approved by Tantou and forwarded to the Editorial Board",
+      message:
+        "Proposal approved by Tantou and forwarded to the Editorial Board",
       data: proposal,
     });
   } catch (error) {
@@ -321,7 +344,6 @@ exports.forwardProposal = async (req, res) => {
     });
   }
 };
-
 
 // @desc    Editor reject / request changes for proposal
 
@@ -374,10 +396,10 @@ exports.rejectProposal = async (req, res) => {
 
     await logAction(
       req.user._id,
-      req.user.name || 'Unknown User',
+      req.user.name || "Unknown User",
       "Rejected Proposal",
       `Proposal: ${proposal.title}`,
-      commentData?.content || ''
+      commentData?.content || "",
     );
 
     res.status(200).json({
@@ -470,7 +492,8 @@ exports.approveProposal = async (req, res) => {
     if (!approvedSubmission) {
       return res.status(409).json({
         success: false,
-        message: "Board approval must be completed through the assigned voting session",
+        message:
+          "Board approval must be completed through the assigned voting session",
       });
     }
     const series = await Series.findOne({ proposalId: proposal._id });
