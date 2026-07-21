@@ -1,6 +1,7 @@
 const SeriesProposal = require("../models/SeriesProposal");
 const Submission = require("../models/SeriesSubmission");
 const Series = require("../models/Series");
+const Notification = require("../models/Notification");
 const { logAction } = require("../utils/auditLogger");
 const { cloudinary } = require("../config/cloudinary");
 const axios = require("axios");
@@ -247,6 +248,7 @@ exports.requestRevision = async (req, res) => {
     });
 
     if (req.io) {
+      req.io.to(proposal.mangakaId.toString()).emit("notification", notification);
       req.io.emit("notification", notification);
     }
 
@@ -391,6 +393,7 @@ exports.rejectProposal = async (req, res) => {
     });
 
     if (req.io) {
+      req.io.to(proposal.mangakaId.toString()).emit("notification", notification);
       req.io.emit("notification", notification);
     }
 
@@ -539,6 +542,7 @@ exports.approveProposal = async (req, res) => {
     });
 
     if (req.io) {
+      req.io.to(proposal.mangakaId.toString()).emit("notification", notification);
       req.io.emit("notification", notification);
     }
 

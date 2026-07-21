@@ -102,8 +102,17 @@ exports.uploadPageResult = async (req, res) => {
       });
     }
 
+    // Normalize assistantImageUrl if relative
+    let finalUrl = assistantImageUrl;
+    if (finalUrl && !finalUrl.startsWith('http') && !finalUrl.startsWith('data:')) {
+      const protocol = req.protocol || 'http';
+      const host = req.get('host') || 'localhost:3000';
+      const cleanPath = finalUrl.startsWith('/') ? finalUrl : `/${finalUrl}`;
+      finalUrl = `${protocol}://${host}${cleanPath}`;
+    }
+
     // Update the page
-    page.assistantImageUrl = assistantImageUrl;
+    page.assistantImageUrl = finalUrl;
     page.status = 'IN_PROGRESS';
     if (note !== undefined) {
       page.note = note;
@@ -176,7 +185,13 @@ exports.submitTask = async (req, res) => {
     // Update each page with assistantImageUrl
     let updatedCount = 0;
     for (const page of pages) {
-      const newUrl = resultsByPageId[String(page._id)] || page.imageUrl;
+      let newUrl = resultsByPageId[String(page._id)] || page.assistantImageUrl || page.imageUrl || '';
+      if (newUrl && !newUrl.startsWith('http') && !newUrl.startsWith('data:')) {
+        const protocol = req.protocol || 'http';
+        const host = req.get('host') || 'localhost:3000';
+        const cleanPath = newUrl.startsWith('/') ? newUrl : `/${newUrl}`;
+        newUrl = `${protocol}://${host}${cleanPath}`;
+      }
       page.assistantImageUrl = newUrl;
       page.status = 'COMPLETED';
       await page.save();

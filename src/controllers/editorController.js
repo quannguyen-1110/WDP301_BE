@@ -291,8 +291,7 @@ exports.getOverdueTasks = async (req, res) => {
     });
   }
 };
-console.log('getTaskStatistics:', typeof exports.getTaskStatistics);
-console.log('getOverdueTasks:', typeof exports.getOverdueTasks);
+
 
 // @desc    Production overview dashboard
 // @route   GET /api/editor/dashboard/production-overview

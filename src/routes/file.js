@@ -20,7 +20,7 @@ router.use(protect);
  */
 router.post(
   "/upload",
-  authorize('ADMIN', 'MANGAKA', 'ASSISTANT'),
+  authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'),
   upload.single("file"),
   async (req, res) => {
     try {

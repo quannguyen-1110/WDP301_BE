@@ -143,6 +143,7 @@ exports.createTask = async (req, res) => {
 
     // Realtime Socket
     if (req.io) {
+      req.io.to(assignedTo.toString()).emit('notification', notification);
       req.io.emit('task_assigned', task);
       req.io.emit('notification', notification);
     }
@@ -219,6 +220,7 @@ exports.submitTask = async (req, res) => {
     });
 
     if (req.io) {
+      req.io.to(task.assignedBy.toString()).emit('notification', notification);
       req.io.emit('task_done', task);
       req.io.emit('notification', notification);
     }
@@ -350,6 +352,7 @@ exports.reviewTask = async (req, res) => {
       });
 
       if (req.io) {
+        req.io.to(task.assignedTo.toString()).emit('notification', approveNotification);
         req.io.emit('task_mangaka_approved', task);
         req.io.emit('notification', approveNotification);
       }
@@ -467,6 +470,7 @@ exports.reviewTask = async (req, res) => {
       });
 
       if (req.io) {
+        req.io.to(task.assignedTo.toString()).emit('notification', approveNotification);
         req.io.emit('task_approved', task);
         req.io.emit('notification', approveNotification);
       }
@@ -504,6 +508,7 @@ exports.reviewTask = async (req, res) => {
       });
 
       if (req.io) {
+        req.io.to(task.assignedTo.toString()).emit('notification', revisionNotification);
         req.io.emit('task_revision_requested', task);
         req.io.emit('notification', revisionNotification);
       }

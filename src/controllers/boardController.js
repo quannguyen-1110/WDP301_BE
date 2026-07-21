@@ -207,6 +207,16 @@ const evaluatePublicationSession = async (req, session) => {
       `Session ID: ${session._id}`,
       `Tied decisions: ${winners.join(', ')}`,
     );
+
+    if (session.chairpersonId) {
+      const tieNotification = await Notification.create({
+        userId: session.chairpersonId,
+        title: 'Publication Tie-Break Required',
+        content: `A tie occurred during publication review voting. As chairperson, your tie-break decision is required between: ${winners.join(', ')}.`,
+        type: 'WARNING',
+      });
+      emitNotification(req, tieNotification);
+    }
     return null;
   }
 
@@ -355,6 +365,17 @@ exports.openPublication = async (req, res) => {
       `Chapter ID: ${chapter._id}`,
       `Session ID: ${session._id}; Required voters: ${voters.length}`,
     );
+
+    const notifications = await Notification.insertMany(
+      voters.map((voter) => ({
+        userId: voter._id,
+        title: 'New Publication Review Assigned',
+        content: `You have been assigned to vote on publication review for Chapter ${chapter.chapterNumber} of "${chapter.seriesId?.title || 'Series'}".`,
+        type: 'INFO',
+      })),
+    );
+    notifications.forEach((notification) => emitNotification(req, notification));
+
     if (req.io) req.io.emit('publication_review_opened', { chapterId, sessionId: session._id });
 
     const populatedSession = await findPopulatedSession(session._id);
@@ -373,10 +394,10 @@ exports.votePublication = async (req, res) => {
     if (!PUBLICATION_DECISIONS.includes(decision)) {
       return res.status(400).json({ success: false, message: 'Invalid publication decision' });
     }
-    if (decision === 'REJECT' && !comment?.trim()) {
+    if (['REJECT', 'RESCHEDULE'].includes(decision) && !comment?.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'A comment is required when rejecting a chapter',
+        message: `A comment is required when decision is ${decision}`,
       });
     }
 
@@ -443,10 +464,10 @@ exports.tieBreakPublication = async (req, res) => {
     if (!PUBLICATION_DECISIONS.includes(decision)) {
       return res.status(400).json({ success: false, message: 'Invalid publication decision' });
     }
-    if (decision === 'REJECT' && !comment?.trim()) {
+    if (['REJECT', 'RESCHEDULE'].includes(decision) && !comment?.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'A comment is required when rejecting a chapter',
+        message: `A comment is required when decision is ${decision}`,
       });
     }
 

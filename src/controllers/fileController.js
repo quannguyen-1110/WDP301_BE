@@ -1,11 +1,14 @@
 const File = require("../models/File");
 const fs = require("fs");
+const path = require("path");
+const axios = require("axios");
 const Task = require("../models/Task");
 const Chapter = require("../models/Chapter");
 const Series = require("../models/Series");
+const { logAction } = require('../utils/auditLogger');
 
 const canAccessFile = async (file, user) => {
-  if (user.role === "ADMIN" || file.uploadedBy?.toString() === user._id.toString()) {
+  if (user.role === "ADMIN" || user.role === "BOARD_MEMBER" || file.uploadedBy?.toString() === user._id.toString()) {
     return true;
   }
   if (!file.chapterId) return false;
@@ -31,8 +34,6 @@ const canAccessFile = async (file, user) => {
   }
   return false;
 };
-const path = require("path");
-const { logAction } = require('../utils/auditLogger');
 
 exports.uploadFile = async (req, res) => {
   try {
@@ -100,6 +101,12 @@ exports.getAllFiles = async (req, res) => {
         { uploadedBy: req.user._id },
         { chapterId: { $in: chapterIds } },
       ];
+    } else if (req.user.role === "ASSISTANT") {
+      const chapterIds = await Task.find({ assignedTo: req.user._id }).distinct("chapterId");
+      filter.$or = [
+        { uploadedBy: req.user._id },
+        { chapterId: { $in: chapterIds } },
+      ];
     }
 
     const files = await File.find(filter)
@@ -161,6 +168,15 @@ exports.downloadFile = async (req, res) => {
         success: false,
         message: "You do not have access to this file",
       });
+    }
+
+    if (file.fileUrl && file.fileUrl.startsWith('http')) {
+      const response = await axios.get(file.fileUrl, {
+        responseType: "stream",
+      });
+      res.setHeader("Content-Type", response.headers["content-type"] || "application/octet-stream");
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(file.originalName || file.fileName)}"`);
+      return response.data.pipe(res);
     }
 
     const filePath = path.join(process.cwd(), "src", "uploads", file.fileName);
