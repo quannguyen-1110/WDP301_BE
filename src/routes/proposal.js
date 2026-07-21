@@ -67,8 +67,7 @@ router.get('/:id', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA'), getP
 /**
  * Download storyboard
  */
-router.get('/:id/storyboard', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), downloadStoryboard);
-
+router.get('/:id/storyboard', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'BOARD_MEMBER'), downloadStoryboard);
 /**
  * @swagger
  * /api/series/proposal/{id}/comment:

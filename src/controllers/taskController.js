@@ -6,6 +6,7 @@ const Chapter = require('../models/Chapter.js');
 const AssistantEarning = require('../models/AssistantEarning.js');
 const Notification = require('../models/Notification.js');
 const { logAction } = require('../utils/auditLogger');
+const { normalizeUrl, normalizePageImageUrls } = require('../utils/helpers.js');
 
 exports.createTask = async (req, res) => {
   try {
@@ -74,11 +75,14 @@ exports.createTask = async (req, res) => {
         });
       }
 
+      // Normalize the sourceImageUrl to an absolute URL before saving
+      const normalizedImageUrl = normalizeUrl(sourceImageUrl, req);
+
       const latestPage = await Page.findOne({ chapterId }).sort({ pageNumber: -1 });
       const page = await Page.create({
         chapterId,
         pageNumber: (latestPage?.pageNumber || 0) + 1,
-        imageUrl: sourceImageUrl,
+        imageUrl: normalizedImageUrl,
         status: 'HAS_TASK',
       });
       resolvedPageIds.push(page._id);

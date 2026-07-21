@@ -5,6 +5,7 @@ const Series = require('../models/Series.js');
 const User = require('../models/User.js');
 const Notification = require('../models/Notification.js');
 const { generateAssistantPageArt } = require('../services/assistantJobService.js');
+const { normalizeUrl, normalizePageImageUrls } = require('../utils/helpers.js');
 
 // @desc    Get current assistant's assigned tasks
 // @route   GET /api/assistant/my-tasks
@@ -17,10 +18,25 @@ exports.getMyTasks = async (req, res) => {
       .populate('pageIds', 'pageNumber imageUrl assistantImageUrl status')
       .sort({ createdAt: -1 });
 
+    // Normalize all image URLs in pages so the assistant can view them
+    const normalizedTasks = tasks.map((task) => {
+      const taskObj = task.toObject ? task.toObject() : { ...task };
+      if (taskObj.pageIds && Array.isArray(taskObj.pageIds)) {
+        taskObj.pageIds = taskObj.pageIds.map((page) =>
+          normalizePageImageUrls(page, req)
+        );
+      }
+      // Also normalize series imageUrl if present
+      if (taskObj.seriesId && taskObj.seriesId.imageUrl) {
+        taskObj.seriesId.imageUrl = normalizeUrl(taskObj.seriesId.imageUrl, req);
+      }
+      return taskObj;
+    });
+
     res.status(200).json({
       success: true,
-      count: tasks.length,
-      data: tasks,
+      count: normalizedTasks.length,
+      data: normalizedTasks,
     });
   } catch (error) {
     res.status(500).json({
@@ -47,15 +63,18 @@ exports.getTaskPages = async (req, res) => {
       });
     }
 
-    const pages = await Page.find({ _id: { $in: task.pageIds } })
+    let pages = await Page.find({ _id: { $in: task.pageIds } })
       .sort({ pageNumber: 1 });
+
+    // Normalize all page image URLs so the assistant can view them
+    const normalizedPages = pages.map((page) => normalizePageImageUrls(page, req));
 
     res.status(200).json({
       success: true,
       count: pages.length,
       data: {
         task,
-        pages,
+        pages: normalizedPages,
       },
     });
   } catch (error) {
