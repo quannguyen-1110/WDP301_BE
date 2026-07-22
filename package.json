@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed": "node src/seeds/seed.js"
+    "seed": "node src/seeds/seed.js",
+    "seed:demo": "node src/seeds/seed.js",
+    "seed:demo:remote": "node src/seeds/seed.js --confirm-remote",
+    "seed:demo:clean": "node src/seeds/seed.js --clean-only --confirm-remote"
   },
   "dependencies": {
     "axios": "^1.18.1",

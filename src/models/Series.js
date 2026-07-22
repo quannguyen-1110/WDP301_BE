@@ -25,7 +25,43 @@ const seriesSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    genre: {
+      type: String,
+      trim: true,
+      default: 'Drama',
+    },
+    tags: {
+      type: [String],
+      default: [],
+    },
+    originalTitle: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    localizedTitle: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    originalAuthor: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    publicationYear: {
+      type: Number,
+      default: null,
+    },
+    isCatalogFeatured: {
+      type: Boolean,
+      default: false,
+    },
     imageUrl: {
+      type: String,
+      default: '',
+    },
+    bannerUrl: {
       type: String,
       default: '',
     },
