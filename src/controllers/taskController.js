@@ -173,6 +173,8 @@ exports.createTask = async (req, res) => {
 
 exports.submitTask = async (req, res) => {
   try {
+    const { assistantImageUrl } = req.body;
+
     const task = await Task.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -195,15 +197,17 @@ exports.submitTask = async (req, res) => {
       });
     }
 
-    // Update page status
+    // Update page status and store assistantImageUrl if provided
+    const pageUpdate = { status: 'COMPLETED' };
+    if (assistantImageUrl) {
+      pageUpdate.assistantImageUrl = assistantImageUrl;
+    }
     await Page.updateMany(
       {
         _id: { $in: task.pageIds },
         status: { $ne: 'APPROVED' },
       },
-      {
-        status: 'COMPLETED',
-      }
+      pageUpdate
     );
 
     // ==================== AUDIT LOG ====================
@@ -261,6 +265,14 @@ exports.getMyTasks = async (req, res) => {
           { assignedBy: userId },
         ],
       };
+    }
+
+    // ── Optional filters by seriesId / chapterId query params ──
+    if (req.query.seriesId) {
+      filter.seriesId = req.query.seriesId;
+    }
+    if (req.query.chapterId) {
+      filter.chapterId = req.query.chapterId;
     }
 
     const tasks = await Task.find(filter)
