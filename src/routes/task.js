@@ -4,11 +4,11 @@ const { authorize } = require('../middleware/auth.js');
 const { protect } = require('../middleware/auth.js'); // Thêm protect nếu chưa có
 const {
   createTask,
-  submitTask,
   getMyTasks,
   reviewTask,
   getTaskById,
 } = require('../controllers/taskController.js');
+const { submitTask } = require('../controllers/assistantController.js');
 
 // Protect all routes
 router.use(protect);

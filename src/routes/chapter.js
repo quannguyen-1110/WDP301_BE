@@ -24,7 +24,7 @@ router.get('/:id', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA', 'ASSI
 /**
  * Create chapter
  */
-router.post('/', authorize('ADMIN', 'MANGAKA', 'EDITOR'), createChapter);
+router.post('/', authorize('ADMIN', 'MANGAKA'), createChapter);
 
 /**
  * Update chapter

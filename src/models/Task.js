@@ -45,6 +45,13 @@ const taskSchema = new mongoose.Schema(
       trim: true,
     },
 
+    type: {
+      type: String,
+      enum: ['Background', 'Character', 'Effects', 'Lettering', 'Toning'],
+      default: 'Background',
+      trim: true,
+    },
+
     description: String,
 
     pageIds: [
@@ -56,21 +63,21 @@ const taskSchema = new mongoose.Schema(
 
     // ===== Canvas Region =====
     regions: [
-  {
-    x: Number,
-    y: Number,
-    width: Number,
-    height: Number,
-    type: {
-      type: String,
-      default: 'TASK_ZONE',
-    },
-    comment: {
-      type: String,
-      default: '',
-    },
-  },
-],
+      {
+        x: Number,
+        y: Number,
+        width: Number,
+        height: Number,
+        type: {
+          type: String,
+          default: 'Background',
+        },
+        comment: {
+          type: String,
+          default: '',
+        },
+      },
+    ],
 
     status: {
       type: String,
@@ -83,6 +90,31 @@ const taskSchema = new mongoose.Schema(
     reviewNote: String,
 
     reviewedAt: Date,
+
+    reviewHistory: [
+      {
+        reviewerId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        reviewerRole: {
+          type: String,
+          enum: ['MANGAKA', 'EDITOR', 'ADMIN'],
+          required: true,
+        },
+        action: {
+          type: String,
+          enum: ['APPROVE', 'REVISION_REQUESTED'],
+          required: true,
+        },
+        note: String,
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
 
     dueAt: Date,
   },

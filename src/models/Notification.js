@@ -34,6 +34,22 @@ const notificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    taskId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Task',
+      default: null,
+    },
+    chapterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Chapter',
+      default: null,
+    },
+    seriesId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Series',
+      default: null,
+    },
   },
   {
     timestamps: true,
