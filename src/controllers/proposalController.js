@@ -6,26 +6,34 @@ const { logAction } = require("../utils/auditLogger");
 const { cloudinary } = require("../config/cloudinary");
 const axios = require("axios");
 
-// @desc    Submit proposal + storyboard file upload (Cloudinary)
+// @desc    Submit proposal + storyboard image uploads (Cloudinary, multiple)
 // @route   POST /api/series/proposal
 exports.createProposal = async (req, res) => {
   try {
     const { title, genre, synopsis } = req.body;
 
-    if (!req.file) {
+    const files = req.files || [];
+    if (!files.length) {
       return res.status(400).json({
         success: false,
-        message: "Storyboard file is required",
+        message: "At least one storyboard image is required",
       });
     }
+
+    // Build storyboardImages array from all uploaded files
+    const storyboardImages = files.map((f) => ({
+      url: f.path,
+      originalName: f.originalname,
+    }));
 
     const proposal = await SeriesProposal.create({
       title,
       genre,
       synopsis,
-      storyboardUrl: req.file.path,
-      storyboardPath: req.file.path,
-      storyboardOriginalName: req.file.originalname,
+      storyboardUrl: storyboardImages[0].url,
+      storyboardPath: storyboardImages[0].url,
+      storyboardOriginalName: storyboardImages[0].originalName,
+      storyboardImages,
       mangakaId: req.user._id,
       status: "SUBMITTED",
     });
@@ -47,6 +55,7 @@ exports.createProposal = async (req, res) => {
         genre: proposal.genre,
         synopsis: proposal.synopsis,
         storyboardUrl: proposal.storyboardUrl,
+        storyboardImages: proposal.storyboardImages,
         status: proposal.status,
         submittedAt: proposal.submittedAt,
       },
@@ -61,16 +70,20 @@ exports.createProposal = async (req, res) => {
 
 // @desc    Get list of proposals pending review
 
-// @desc    Get list of proposals (optionally filtered by status)
+// @desc    Get list of proposals (optionally filtered by status / mangakaId)
 // @route   GET /api/series/proposal
-// @access  EDITOR only
+// @access  EDITOR / MANGAKA
 
 exports.getProposals = async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, mangakaId } = req.query;
     const filter = {};
     if (status) {
       filter.status = status;
+    }
+    // If mangakaId is provided, filter by mangaka
+    if (mangakaId) {
+      filter.mangakaId = mangakaId;
     }
 
     const proposals = await SeriesProposal.find(filter)
@@ -444,6 +457,41 @@ exports.resubmitProposal = async (req, res) => {
         success: false,
         message: `Cannot resubmit proposal with status: ${proposal.status}. Only REVISION_REQUESTED proposals can be resubmitted.`,
       });
+    }
+
+    // Update synopsis if provided
+    if (req.body.synopsis) {
+      proposal.synopsis = req.body.synopsis;
+    }
+
+    // Remove images if requested
+    let removeImageUrls = [];
+    if (typeof req.body.removeImages === 'string') {
+      try {
+        removeImageUrls = JSON.parse(req.body.removeImages);
+      } catch (e) {
+        console.warn('Invalid removeImages payload');
+      }
+    }
+    if (removeImageUrls.length > 0) {
+      proposal.storyboardImages = (proposal.storyboardImages || []).filter(
+        (img) => !removeImageUrls.includes(img.url)
+      );
+    }
+
+    // Append new storyboard images if uploaded
+    const files = req.files || [];
+    if (files.length > 0) {
+      const newImages = files.map((f) => ({
+        url: f.path,
+        originalName: f.originalname,
+      }));
+      proposal.storyboardImages = [...(proposal.storyboardImages || []), ...newImages];
+      // Update legacy fields with first image
+      if (!proposal.storyboardUrl || !proposal.storyboardOriginalName) {
+        proposal.storyboardUrl = newImages[0].url;
+        proposal.storyboardOriginalName = newImages[0].originalName;
+      }
     }
 
     proposal.status = "RESUBMITTED";

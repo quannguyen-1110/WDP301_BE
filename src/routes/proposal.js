@@ -22,7 +22,7 @@ router.use(protect);
 /**
  * Mangaka tạo proposal
  */
-router.post('/', authorize('MANGAKA'), upload.single('storyboard'), createProposal);
+router.post('/', authorize('MANGAKA'), upload.array('storyboards', 10), createProposal);
 
 /**
  * @swagger
@@ -170,7 +170,7 @@ router.put('/:id/reject', authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER'), rejectPr
  *       200:
  *         description: Proposal resubmitted
  */
-router.put('/:id/resubmit', authorize('MANGAKA'), resubmitProposal);
+router.put('/:id/resubmit', authorize('MANGAKA'), upload.array('storyboards', 10), resubmitProposal);
 
 /**
  * @swagger

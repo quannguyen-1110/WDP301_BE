@@ -64,7 +64,7 @@ const seriesProposalSchema = new mongoose.Schema(
     },
     storyboardUrl: {
       type: String,
-      required: [true, 'Storyboard URL is required'],
+      default: '',
     },
     storyboardPath: {
       type: String,
@@ -72,8 +72,12 @@ const seriesProposalSchema = new mongoose.Schema(
     },
     storyboardOriginalName: {
       type: String,
-      required: [true, 'Storyboard original name is required'],
+      default: '',
     },
+    storyboardImages: [{
+      url: { type: String, required: true },
+      originalName: { type: String, required: true },
+    }],
     status: {
       type: String,
       enum: PROPOSAL_STATUS,
