@@ -4,6 +4,7 @@ const SeriesProposal = require('../models/SeriesProposal');
 const Series = require('../models/Series');
 const Notification = require('../models/Notification');
 const { logAction } = require('../utils/auditLogger');
+const { isOverdue } = require('../utils/votingDeadline');
 
 const PROPOSAL_DECISIONS = ['ACCEPT', 'REJECT'];
 
@@ -16,6 +17,22 @@ const finalizeProposal = async (req, submission, decision, decidedBy) => {
   if (decision === 'ACCEPT') {
     const proposal = await SeriesProposal.findById(submission.proposalId);
     if (proposal) {
+      // Determine preferred publication schedule from the majority ACCEPT votes
+      const voterIds = submission.requiredVoters.map((entry) => entry.userId);
+      const votes = await Vote.find({
+        submissionId: submission._id,
+        voterId: { $in: voterIds },
+        decision: 'ACCEPT',
+        schedule: { $ne: null },
+      });
+      const scheduleCounts = { WEEKLY: 0, MONTHLY: 0 };
+      votes.forEach((vote) => {
+        if (vote.schedule === 'WEEKLY' || vote.schedule === 'MONTHLY') {
+          scheduleCounts[vote.schedule] += 1;
+        }
+      });
+      const preferredSchedule = scheduleCounts.MONTHLY > scheduleCounts.WEEKLY ? 'MONTHLY' : scheduleCounts.WEEKLY > scheduleCounts.MONTHLY ? 'WEEKLY' : null;
+
       const series = await Series.findOneAndUpdate(
         { proposalId: proposal._id },
         {
@@ -27,23 +44,29 @@ const finalizeProposal = async (req, submission, decision, decidedBy) => {
             status: 'ACTIVE',
             proposalId: proposal._id,
           },
+          $set: preferredSchedule ? { pubSchedule: preferredSchedule } : {},
         },
         { new: true, upsert: true, runValidators: true },
       );
       series.status = 'ACTIVE';
+      if (preferredSchedule) series.pubSchedule = preferredSchedule;
       await series.save();
 
       submission.seriesId = series._id;
+      submission.action = preferredSchedule === 'MONTHLY' ? 'APPROVE_MONTHLY' : 'APPROVE_WEEKLY';
       proposal.status = 'APPROVED';
       proposal.seriesId = series._id;
       await proposal.save();
 
-      // Notify Mangaka
+      // Notify Mangaka (with deep-link redirect)
       const approveNotification = await Notification.create({
         userId: proposal.mangakaId,
         title: 'Series Approved by Board!',
-        content: `Congratulations! Your series "${proposal.title}" has been approved by the Editorial Board and is now ACTIVE.`,
+        content: `Congratulations! Your series "${proposal.title}" has been approved by the Editorial Board and is now ACTIVE${preferredSchedule ? ` with ${preferredSchedule} publication.` : '.'}`,
         type: 'INFO',
+        link: `/editor/proposals/${proposal._id}`,
+        targetType: 'PROPOSAL',
+        targetId: proposal._id,
       });
 
       if (req.io) {
@@ -53,6 +76,7 @@ const finalizeProposal = async (req, submission, decision, decidedBy) => {
           seriesId: series._id,
           title: series.title,
           status: 'ACTIVE',
+          pubSchedule: preferredSchedule,
         });
       }
     }
@@ -69,12 +93,15 @@ const finalizeProposal = async (req, submission, decision, decidedBy) => {
         { new: true }
       );
 
-      // Notify Mangaka
+      // Notify Mangaka (with deep-link redirect)
       const rejectNotification = await Notification.create({
         userId: proposal.mangakaId,
         title: 'Series Rejected by Board',
         content: `Unfortunately, your series "${proposal.title}" has been rejected by the Editorial Board.`,
         type: 'WARNING',
+        link: `/editor/proposals/${proposal._id}`,
+        targetType: 'PROPOSAL',
+        targetId: proposal._id,
       });
 
       if (req.io) {
@@ -108,7 +135,8 @@ const finalizeProposal = async (req, submission, decision, decidedBy) => {
 const evaluateProposal = async (req, submission) => {
   const allVoted = submission.requiredVoters.length > 0
     && submission.requiredVoters.every((entry) => entry.hasVoted);
-  if (!allVoted) return;
+  const deadlineReached = isOverdue(submission);
+  if (!allVoted && !deadlineReached) return;
 
   const voterIds = submission.requiredVoters.map((entry) => entry.userId);
   const votes = await Vote.find({
@@ -117,6 +145,13 @@ const evaluateProposal = async (req, submission) => {
   });
   const accepts = votes.filter((vote) => vote.decision === 'ACCEPT').length;
   const rejects = votes.filter((vote) => vote.decision === 'REJECT').length;
+
+  // If the voting deadline passed and no board member cast a vote, treat it
+  // as a rejection rather than leaving the session stuck in PENDING.
+  if (deadlineReached && votes.length === 0) {
+    await finalizeProposal(req, submission, 'REJECT', req.user._id);
+    return;
+  }
 
   if (accepts === rejects) {
     submission.decisionStatus = 'TIE_BREAK_REQUIRED';
@@ -145,11 +180,17 @@ const evaluateProposal = async (req, submission) => {
 
 exports.submitVote = async (req, res) => {
   try {
-    const { submissionId, decision, comment } = req.body || {};
+    const { submissionId, decision, comment, schedule } = req.body || {};
     if (!submissionId || !PROPOSAL_DECISIONS.includes(decision)) {
       return res.status(400).json({
         success: false,
         message: 'submissionId and a valid decision are required',
+      });
+    }
+    if (schedule && !['WEEKLY', 'MONTHLY'].includes(schedule)) {
+      return res.status(400).json({
+        success: false,
+        message: 'schedule must be WEEKLY or MONTHLY',
       });
     }
 
@@ -167,6 +208,17 @@ exports.submitVote = async (req, res) => {
       return res.status(409).json({
         success: false,
         message: 'This proposal submission is not open for voting',
+      });
+    }
+
+    // Enforce the voting deadline: no votes accepted after it passes.
+    // Finalize from the votes already cast (if any) so the session does not
+    // stay stuck in PENDING forever.
+    if (isOverdue(submission)) {
+      await evaluateProposal(req, submission);
+      return res.status(409).json({
+        success: false,
+        message: 'Voting deadline has passed',
       });
     }
 
@@ -190,6 +242,7 @@ exports.submitVote = async (req, res) => {
       submissionId,
       voterId: req.user._id,
       decision,
+      schedule: decision === 'ACCEPT' ? (schedule || null) : null,
       comment: comment?.trim() || '',
     });
     voterEntry.hasVoted = true;

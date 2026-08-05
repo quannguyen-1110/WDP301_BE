@@ -5,6 +5,28 @@ const User = require('../models/User');
 const Vote = require('../models/Vote');
 const Notification = require('../models/Notification');
 const { logAction } = require('../utils/auditLogger');
+const { deadlineFromNow, isOverdue } = require('../utils/votingDeadline');
+
+/**
+ * Randomly pick N active BOARD_MEMBER users (optionally excluding ids).
+ */
+const pickRandomBoardMembers = async (count, excludeIds = []) => {
+  const exclude = excludeIds.map((id) => id.toString());
+  const pipeline = [
+    {
+      $match: {
+        role: 'BOARD_MEMBER',
+        isActive: { $ne: false },
+        deletedAt: null,
+        _id: { $nin: exclude.map((id) => new mongoose.Types.ObjectId(id)) },
+      },
+    },
+    { $sample: { size: count } },
+    { $project: { _id: 1 } },
+  ];
+  const members = await User.aggregate(pipeline);
+  return members.map((m) => m._id);
+};
 
 const DIRECTIVE_ACTIONS = ['CONTINUE', 'CANCEL', 'CHANGE_FORMAT'];
 const VOTE_DECISIONS = ['ACCEPT', 'REJECT'];
@@ -31,6 +53,7 @@ const toDirective = async (submission) => {
     newSchedule: submission.newSchedule,
     reason: submission.reason,
     status: submission.decisionStatus,
+    votingDeadline: submission.votingDeadline || null,
     chairpersonId: submission.chairpersonId?._id || submission.chairpersonId,
     chairpersonName: submission.chairpersonId?.name || '',
     tiedDecisions: submission.tiedDecisions,
@@ -71,6 +94,9 @@ const notifyDirectiveOutcome = async (req, series, submission, approved, comment
       title: `Series directive ${result}`,
       content: `${submission.action} for "${series.title}" was ${result}.${note}`,
       type: approved ? 'INFO' : 'WARNING',
+      link: `/editor/series/${series._id}`,
+      targetType: 'SERIES',
+      targetId: series._id,
     })),
   );
   notifications.forEach((notification) => emitNotification(req, notification));
@@ -121,7 +147,8 @@ const finalizeDirective = async (req, submission, decision, comment, decidedBy) 
 const evaluateDirective = async (req, submission) => {
   const allVoted = submission.requiredVoters.length > 0
     && submission.requiredVoters.every((entry) => entry.hasVoted);
-  if (!allVoted) return;
+  const deadlineReached = isOverdue(submission);
+  if (!allVoted && !deadlineReached) return;
 
   const voterIds = submission.requiredVoters.map((entry) => entry.userId);
   const votes = await Vote.find({
@@ -129,6 +156,13 @@ const evaluateDirective = async (req, submission) => {
     voterId: { $in: voterIds },
   });
   const tally = tallyVotes(votes, submission.requiredVoters.length);
+
+  // If the deadline passed and nobody voted, reject the directive rather
+  // than leaving it stuck in PENDING.
+  if (deadlineReached && votes.length === 0) {
+    await finalizeDirective(req, submission, 'REJECT', '', req.user._id);
+    return;
+  }
 
   if (tally.ACCEPT === tally.REJECT) {
     submission.decisionStatus = 'TIE_BREAK_REQUIRED';
@@ -175,6 +209,7 @@ exports.createDirective = async (req, res) => {
       newSchedule,
       voterIds,
       chairpersonId,
+      autoAssign,
     } = req.body || {};
     if (!mongoose.isValidObjectId(seriesId)
       || !DIRECTIVE_ACTIONS.includes(actionType)
@@ -213,22 +248,45 @@ exports.createDirective = async (req, res) => {
       });
     }
 
-    const uniqueVoterIds = voterIds
-      ? [...new Set(voterIds.map((id) => id.toString()))]
-      : null;
-    if (uniqueVoterIds?.some((id) => !mongoose.isValidObjectId(id))) {
-      return res.status(400).json({ success: false, message: 'One or more voterIds are invalid' });
+    let boardMembers = [];
+    if (autoAssign || !voterIds) {
+      // Random assignment: pick 4 board members automatically
+      boardMembers = await pickRandomBoardMembers(4);
+      if (boardMembers.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'No eligible BOARD_MEMBER users available for random assignment',
+        });
+      }
+    } else {
+      const uniqueVoterIds = [...new Set(voterIds.map((id) => id.toString()))];
+      if (uniqueVoterIds.some((id) => !mongoose.isValidObjectId(id))) {
+        return res.status(400).json({ success: false, message: 'One or more voterIds are invalid' });
+      }
+      const voterQuery = {
+        role: 'BOARD_MEMBER',
+        isActive: { $ne: false },
+        deletedAt: null,
+        _id: { $in: uniqueVoterIds },
+      };
+      const found = await User.find(voterQuery).select('_id');
+      if (found.length !== uniqueVoterIds.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'All voters must be active BOARD_MEMBER users',
+        });
+      }
+      boardMembers = found;
     }
 
-    const voterQuery = {
-      role: 'BOARD_MEMBER',
-      isActive: { $ne: false },
-      deletedAt: null,
-    };
-    if (uniqueVoterIds) voterQuery._id = { $in: uniqueVoterIds };
-    const boardMembers = await User.find(voterQuery).select('_id');
-    if (boardMembers.length === 0
-      || (uniqueVoterIds && boardMembers.length !== uniqueVoterIds.length)) {
+    // Normalize: aggregate returns ObjectIds; find() returns documents.
+    // Ensure every element is a document-shaped object `{ _id }`.
+    boardMembers = boardMembers.map((m) => (
+      m && typeof m === 'object' && m._id
+        ? m
+        : { _id: m }
+    ));
+    if (boardMembers.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'All voters must be active BOARD_MEMBER users',
@@ -261,6 +319,7 @@ exports.createDirective = async (req, res) => {
       reason: reason.trim(),
       newSchedule: actionType === 'CHANGE_FORMAT' ? newSchedule : null,
       decisionStatus: 'PENDING',
+      votingDeadline: deadlineFromNow(),
       chairpersonId: selectedChairpersonId,
       requiredVoters: boardMembers.map((member) => ({
         userId: member._id,
@@ -300,6 +359,10 @@ exports.voteDirective = async (req, res) => {
     }
     if (submission.decisionStatus !== 'PENDING') {
       return res.status(409).json({ success: false, message: 'Directive is not open for voting' });
+    }
+    if (isOverdue(submission)) {
+      await evaluateDirective(req, submission);
+      return res.status(409).json({ success: false, message: 'Voting deadline has passed' });
     }
 
     const entry = submission.requiredVoters.find(

@@ -3,6 +3,7 @@ const Page = require("../models/Page.js");
 const Task = require("../models/Task.js");
 const Series = require("../models/Series.js");
 const Annotation = require("../models/Annotation.js");
+const Notification = require("../models/Notification.js");
 const { logAction } = require('../utils/auditLogger');
 
 const CHAPTER_STATUS = {
@@ -203,6 +204,32 @@ exports.updateChapter = async (req, res) => {
 
     if (!chapter) {
       return res.status(404).json({ success: false, message: "Chapter not found" });
+    }
+
+    // ===== Chapter Revision Notification =====
+    // When an editor requests a revision for a chapter, notify the mangaka
+    // (and any assigned assistants) with a deep-link to the chapter workspace.
+    if (req.body.status === 'REVISION_REQUESTED') {
+      const series = await Series.findById(chapter.seriesId).select('title mangakaId editorId');
+      const recipients = [series?.mangakaId, series?.editorId].filter(Boolean);
+      const uniqueRecipients = [...new Set(recipients.map((id) => id.toString()))];
+
+      const notifications = await Notification.insertMany(
+        uniqueRecipients.map((userId) => ({
+          userId,
+          title: 'Chapter Revision Requested',
+          content: `Editor requested revision for Chapter ${chapter.chapterNumber} of "${series?.title || 'Series'}". Please review the annotations and revise.`,
+          type: 'WARNING',
+          link: `/editor/review/${chapter.seriesId}`,
+          targetType: 'CHAPTER',
+          targetId: chapter._id,
+        })),
+      );
+      if (req.io) {
+        notifications.forEach((notification) => {
+          req.io.to(notification.userId.toString()).emit('notification', notification);
+        });
+      }
     }
 
     await logAction(

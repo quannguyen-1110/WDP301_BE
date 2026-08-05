@@ -8,6 +8,28 @@ const Vote = require('../models/Vote');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { logAction } = require('../utils/auditLogger');
+const { deadlineFromNow, isOverdue } = require('../utils/votingDeadline');
+
+/**
+ * Randomly pick N active BOARD_MEMBER users (optionally excluding ids).
+ */
+const pickRandomBoardMembers = async (count, excludeIds = []) => {
+  const exclude = excludeIds.map((id) => id.toString());
+  const pipeline = [
+    {
+      $match: {
+        role: 'BOARD_MEMBER',
+        isActive: { $ne: false },
+        deletedAt: null,
+        _id: { $nin: exclude.map((id) => new mongoose.Types.ObjectId(id)) },
+      },
+    },
+    { $sample: { size: count } },
+    { $project: { _id: 1 } },
+  ];
+  const members = await User.aggregate(pipeline);
+  return members.map((m) => m._id);
+};
 
 const PUBLICATION_DECISIONS = ['PUBLISH', 'REJECT', 'RESCHEDULE'];
 const ACTIVE_SESSION_STATUSES = ['PENDING', 'TIE_BREAK_REQUIRED'];
@@ -89,6 +111,9 @@ const notifyPublicationOutcome = async (req, chapter, series, decision, comment)
       title,
       content,
       type: decision === 'REJECT' ? 'WARNING' : 'INFO',
+      link: `/editor/review/${chapter.seriesId}`,
+      targetType: 'CHAPTER',
+      targetId: chapter._id,
     })),
   );
   notifications.forEach((notification) => emitNotification(req, notification));
@@ -184,7 +209,8 @@ const evaluatePublicationSession = async (req, session) => {
   });
   const allVoted = session.requiredVoters.length > 0
     && session.requiredVoters.every((entry) => entry.hasVoted);
-  if (!allVoted) return null;
+  const deadlineReached = isOverdue(session);
+  if (!allVoted && !deadlineReached) return null;
 
   const tally = tallyVotes(votes, session.requiredVoters.length);
   const counts = PUBLICATION_DECISIONS.map((decision) => ({
@@ -195,6 +221,12 @@ const evaluatePublicationSession = async (req, session) => {
   const winners = counts
     .filter((entry) => entry.count === maxCount)
     .map((entry) => entry.decision);
+
+  // If the deadline passed and nobody voted, reject the chapter publication
+  // rather than leaving the session stuck in PENDING.
+  if (deadlineReached && votes.length === 0) {
+    return applyPublicationDecision(req, session, 'REJECT', 'No votes were cast before the voting deadline.', req.user._id);
+  }
 
   if (winners.length > 1) {
     session.decisionStatus = 'TIE_BREAK_REQUIRED';
@@ -307,21 +339,44 @@ exports.openPublication = async (req, res) => {
       return res.status(409).json({ success: false, message: 'An active publication review already exists' });
     }
 
-    const uniqueVoterIds = voterIds
-      ? [...new Set(voterIds.map((id) => id.toString()))]
-      : null;
-    if (uniqueVoterIds?.some((id) => !mongoose.isValidObjectId(id))) {
-      return res.status(400).json({ success: false, message: 'One or more voterIds are invalid' });
+    let voters = [];
+    if (!voterIds || voterIds.length === 0) {
+      // Auto random assignment: pick 4 board members automatically
+      voters = await pickRandomBoardMembers(4);
+      if (voters.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'No eligible BOARD_MEMBER users available for random assignment',
+        });
+      }
+    } else {
+      const uniqueVoterIds = [...new Set(voterIds.map((id) => id.toString()))];
+      if (uniqueVoterIds.some((id) => !mongoose.isValidObjectId(id))) {
+        return res.status(400).json({ success: false, message: 'One or more voterIds are invalid' });
+      }
+      const voterQuery = {
+        role: 'BOARD_MEMBER',
+        isActive: { $ne: false },
+        deletedAt: null,
+        _id: { $in: uniqueVoterIds },
+      };
+      const found = await User.find(voterQuery).select('_id');
+      if (found.length !== uniqueVoterIds.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'All voters must be active BOARD_MEMBER users',
+        });
+      }
+      voters = found;
     }
 
-    const voterQuery = {
-      role: 'BOARD_MEMBER',
-      isActive: { $ne: false },
-      deletedAt: null,
-    };
-    if (uniqueVoterIds) voterQuery._id = { $in: uniqueVoterIds };
-    const voters = await User.find(voterQuery).select('_id');
-    if (voters.length === 0 || (uniqueVoterIds && voters.length !== uniqueVoterIds.length)) {
+    // Normalize: aggregate returns ObjectIds; find() returns documents.
+    voters = voters.map((v) => (
+      v && typeof v === 'object' && v._id
+        ? v
+        : { _id: v }
+    ));
+    if (voters.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'All voters must be active BOARD_MEMBER users',
@@ -350,6 +405,7 @@ exports.openPublication = async (req, res) => {
       submittedBy: req.user._id,
       decisionStatus: 'PENDING',
       newSchedule: newSchedule || null,
+      votingDeadline: deadlineFromNow(),
       chairpersonId: selectedChairpersonId,
       requiredVoters: voters.map((voter) => ({
         userId: voter._id,
@@ -372,6 +428,9 @@ exports.openPublication = async (req, res) => {
         title: 'New Publication Review Assigned',
         content: `You have been assigned to vote on publication review for Chapter ${chapter.chapterNumber} of "${chapter.seriesId?.title || 'Series'}".`,
         type: 'INFO',
+        link: `/editor/review/${chapter.seriesId?._id || chapter.seriesId}`,
+        targetType: 'CHAPTER',
+        targetId: chapter._id,
       })),
     );
     notifications.forEach((notification) => emitNotification(req, notification));
@@ -410,6 +469,10 @@ exports.votePublication = async (req, res) => {
     }
     if (session.decisionStatus !== 'PENDING') {
       return res.status(409).json({ success: false, message: 'This publication review is not open for voting' });
+    }
+    if (isOverdue(session)) {
+      await evaluatePublicationSession(req, session);
+      return res.status(409).json({ success: false, message: 'Voting deadline has passed' });
     }
 
     const voterEntry = session.requiredVoters.find(

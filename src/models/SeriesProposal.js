@@ -88,6 +88,12 @@ const seriesProposalSchema = new mongoose.Schema(
       ref: 'User',
       required: [true, 'Mangaka ID is required'],
     },
+    // When set to true (upon forwarding to board), the author identity is
+    // hidden from board members (blind review / anonymous judging).
+    isAnonymous: {
+      type: Boolean,
+      default: false,
+    },
     comments: {
       type: [commentSchema],
       default: [],

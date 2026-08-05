@@ -34,6 +34,24 @@ const notificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // ===== Deep-link redirect fields =====
+    // Friendly route path to navigate to when the user clicks the notification.
+    link: {
+      type: String,
+      default: "",
+    },
+    // What kind of entity this notification refers to.
+    targetType: {
+      type: String,
+      enum: ["PROPOSAL", "CHAPTER", "SERIES", "TASK", null],
+      default: null,
+    },
+    // ID of the target entity (proposalId / chapterId / seriesId / taskId).
+    targetId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -41,3 +59,4 @@ const notificationSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model("Notification", notificationSchema);
+module.exports.NOTIFICATION_TYPE = NOTIFICATION_TYPE;
