@@ -15,6 +15,7 @@ exports.createTask = async (req, res) => {
       chapterId,
       assignedTo,
       title,
+      type,
       description,
       pageIds,
       dueAt,
@@ -23,30 +24,59 @@ exports.createTask = async (req, res) => {
       sourceImageUrl,
     } = req.body;
 
-    // DEBUG: Log incoming request body
-    console.log('[createTask] req.body =>', JSON.stringify({
-      seriesId, chapterId, assignedTo, title, sourceImageUrl,
-      pageIds, regions: regions?.length, region: !!region
-    }));
+    if (!seriesId || !chapterId || !assignedTo || !title?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Series, chapter, assistant, and task title are required',
+      });
+    }
+
+    const normalizedRegions = Array.isArray(regions)
+      ? regions
+      : (region ? [region] : []);
+
+    if (normalizedRegions.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one work region is required',
+      });
+    }
+
+    const invalidRegion = normalizedRegions.some((item) => {
+      const values = [item?.x, item?.y, item?.width, item?.height];
+      return values.some((value) => !Number.isFinite(Number(value))) ||
+        Number(item.x) < 0 || Number(item.y) < 0 ||
+        Number(item.width) <= 0 || Number(item.height) <= 0 ||
+        Number(item.x) + Number(item.width) > 100 ||
+        Number(item.y) + Number(item.height) > 100;
+    });
+
+    if (invalidRegion) {
+      return res.status(400).json({
+        success: false,
+        message: 'Work regions must stay inside the page bounds',
+      });
+    }
+
+    if (dueAt && Number.isNaN(new Date(dueAt).getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid task deadline',
+      });
+    }
 
     // Validate assignedTo user role
     const assistant = await User.findById(assignedTo);
 
     if (!assistant || assistant.role !== 'ASSISTANT' || assistant.isActive === false || assistant.deletedAt) {
-      console.log('[createTask] FAIL: assistant check. assistant =>', assistant?._id, assistant?.role, assistant?.isActive);
       return res.status(400).json({
         success: false,
         message: 'Assigned user must be an ASSISTANT',
       });
     }
 
-    // DEBUG: Check what's in the database for this chapter
-    const chapterById = await Chapter.findById(chapterId);
-    console.log('[createTask] chapterById =>', chapterById?._id, 'chapter.seriesId =>', chapterById?.seriesId?.toString(), 'requested seriesId =>', seriesId);
-
     const chapter = await Chapter.findOne({ _id: chapterId, seriesId });
     if (!chapter) {
-      console.log('[createTask] FAIL: chapter does not belong to series. chapterId =>', chapterId, 'seriesId =>', seriesId);
       return res.status(400).json({
         success: false,
         message: 'Chapter does not belong to the selected series',
@@ -107,17 +137,32 @@ exports.createTask = async (req, res) => {
     }
 
     const taskDueAt = dueAt ? new Date(dueAt) : (chapter.dueAt || new Date(Date.now() + 3 * 24 * 3600 * 1000));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (taskDueAt < today) {
+      return res.status(400).json({
+        success: false,
+        message: 'Task deadline cannot be in the past',
+      });
+    }
+    if (chapter.dueAt && taskDueAt > chapter.dueAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Task deadline cannot be later than the chapter deadline',
+      });
+    }
 
     const task = await Task.create({
       seriesId,
       chapterId,
       assignedTo,
       assignedBy: req.user._id,
-      title,
+      title: title.trim(),
+      type,
       description,
       pageIds: resolvedPageIds,
       dueAt: taskDueAt,
-      regions: regions || (region ? [region] : []),
+      regions: normalizedRegions,
     });
 
     // Update assigned pages
@@ -143,6 +188,9 @@ exports.createTask = async (req, res) => {
       title: 'New Task Assigned',
       content: `You have been assigned a new task: "${title}".`,
       type: 'INFO',
+      taskId: task._id,
+      chapterId: task.chapterId,
+      seriesId: task.seriesId,
     });
 
     // Realtime Socket
@@ -162,80 +210,6 @@ exports.createTask = async (req, res) => {
     res.status(201).json({
       success: true,
       data: populatedTask,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-exports.submitTask = async (req, res) => {
-  try {
-    const { assistantImageUrl } = req.body;
-
-    const task = await Task.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        assignedTo: req.user._id,
-        status: { $in: ['PENDING', 'IN_PROGRESS', 'REVISION_REQUESTED', 'REVISING'] },
-      },
-      {
-        status: 'SUBMITTED',
-        submittedAt: new Date(),
-      },
-      {
-        new: true,
-      }
-    );
-
-    if (!task) {
-      return res.status(404).json({
-        success: false,
-        message: 'Task not found, not assigned to you, or not submittable',
-      });
-    }
-
-    // Update page status and store assistantImageUrl if provided
-    const pageUpdate = { status: 'COMPLETED' };
-    if (assistantImageUrl) {
-      pageUpdate.assistantImageUrl = assistantImageUrl;
-    }
-    await Page.updateMany(
-      {
-        _id: { $in: task.pageIds },
-        status: { $ne: 'APPROVED' },
-      },
-      pageUpdate
-    );
-
-    // ==================== AUDIT LOG ====================
-    await logAction(
-      req.user._id,
-      req.user.name || 'Unknown',
-      "Submitted Task",
-      `Task ID: ${req.params.id}`,
-      `Series: ${task.seriesId}, Chapter: ${task.chapterId}`
-    );
-
-    // Notify Mangaka that Assistant submitted the task
-    const notification = await Notification.create({
-      userId: task.assignedBy,
-      title: 'Task Submitted',
-      content: `Assistant has submitted the task: "${task.title}". Please review it.`,
-      type: 'INFO',
-    });
-
-    if (req.io) {
-      req.io.to(task.assignedBy.toString()).emit('notification', notification);
-      req.io.emit('task_done', task);
-      req.io.emit('notification', notification);
-    }
-
-    res.status(200).json({
-      success: true,
-      data: task,
     });
   } catch (error) {
     res.status(500).json({
@@ -306,6 +280,16 @@ exports.reviewTask = async (req, res) => {
       });
     }
 
+    if (
+      (action === 'REVISION_REQUESTED' || action === 'REJECT') &&
+      !reviewNote?.trim()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'A revision reason is required',
+      });
+    }
+
     const task = await Task.findById(req.params.id);
 
     if (!task) {
@@ -330,18 +314,39 @@ exports.reviewTask = async (req, res) => {
         message: 'You can only review tasks for your assigned series',
       });
     }
-    if (!['SUBMITTED', 'MANGAKA_APPROVED', 'PENDING_REVIEW'].includes(task.status)) {
+    const isMangakaReview = req.user.role === 'MANGAKA';
+    const isEditorReview = ['EDITOR', 'ADMIN'].includes(req.user.role);
+    if (isMangakaReview && !['SUBMITTED', 'PENDING_REVIEW'].includes(task.status)) {
       return res.status(400).json({
         success: false,
-        message: `Task cannot be reviewed from status ${task.status}`,
+        message: 'The Assistant must submit the task before Mangaka review',
+      });
+    }
+    if (isEditorReview && task.status !== 'MANGAKA_APPROVED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Mangaka approval is required before Tantou Editor review',
       });
     }
 
 
     if (action === 'APPROVE' && req.user.role === 'MANGAKA') {
+      if (!['SUBMITTED', 'PENDING_REVIEW'].includes(task.status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'The Assistant must submit the task before Mangaka review',
+        });
+      }
+
       task.status = 'MANGAKA_APPROVED';
       task.reviewedAt = new Date();
       task.reviewNote = reviewNote || 'Approved by Mangaka (Round 1)';
+      task.reviewHistory.push({
+        reviewerId: req.user._id,
+        reviewerRole: req.user.role,
+        action: 'APPROVE',
+        note: task.reviewNote,
+      });
       await task.save();
 
       await Page.updateMany(
@@ -365,12 +370,48 @@ exports.reviewTask = async (req, res) => {
         title: 'Task Approved by Mangaka (Round 1)',
         content: `Your task "${task.title}" has been approved by Mangaka and sent for Editor final review.`,
         type: 'INFO',
+        taskId: task._id,
+        chapterId: task.chapterId,
+        seriesId: task.seriesId,
       });
+
+      const remainingMangakaReviews = await Task.countDocuments({
+        chapterId: task.chapterId,
+        status: { $nin: ['MANGAKA_APPROVED', 'APPROVED'] },
+      });
+
+      let editorNotification = null;
+      if (remainingMangakaReviews === 0) {
+        const transitionedChapter = await Chapter.findOneAndUpdate(
+          {
+            _id: task.chapterId,
+            status: { $ne: 'UNDER_REVIEW' },
+          },
+          { status: 'UNDER_REVIEW' },
+          { new: true }
+        );
+
+        if (transitionedChapter && series?.editorId) {
+          editorNotification = await Notification.create({
+            userId: series.editorId,
+            title: 'Chapter Ready for Final Review',
+            content: `All production tasks in the chapter have passed Mangaka review.`,
+            type: 'INFO',
+            taskId: task._id,
+            chapterId: task.chapterId,
+            seriesId: task.seriesId,
+          });
+        }
+      }
 
       if (req.io) {
         req.io.to(task.assignedTo.toString()).emit('notification', approveNotification);
+        if (editorNotification) {
+          req.io.to(series.editorId.toString()).emit('notification', editorNotification);
+        }
         req.io.emit('task_mangaka_approved', task);
         req.io.emit('notification', approveNotification);
+        if (editorNotification) req.io.emit('notification', editorNotification);
       }
 
       return res.status(200).json({
@@ -391,6 +432,12 @@ exports.reviewTask = async (req, res) => {
       task.status = 'APPROVED';
       task.reviewedAt = new Date();
       task.reviewNote = reviewNote || 'Final approval by Editor';
+      task.reviewHistory.push({
+        reviewerId: req.user._id,
+        reviewerRole: req.user.role,
+        action: 'APPROVE',
+        note: task.reviewNote,
+      });
 
       await task.save();
 
@@ -483,17 +530,55 @@ exports.reviewTask = async (req, res) => {
         title: 'Task Final Approved by Editor',
         content: `Your task "${task.title}" has received final approval from Editor! Earnings recorded. ${reviewNote || ''}`,
         type: 'INFO',
+        taskId: task._id,
+        chapterId: task.chapterId,
+        seriesId: task.seriesId,
       });
+
+      const remainingFinalReviews = await Task.countDocuments({
+        chapterId: task.chapterId,
+        status: { $ne: 'APPROVED' },
+      });
+
+      let readyNotification = null;
+      if (remainingFinalReviews === 0) {
+        const transitionedChapter = await Chapter.findOneAndUpdate(
+          {
+            _id: task.chapterId,
+            status: { $ne: 'SENT_TO_EDITORIAL' },
+          },
+          { status: 'SENT_TO_EDITORIAL' },
+          { new: true }
+        );
+
+        if (transitionedChapter) {
+          readyNotification = await Notification.create({
+            userId: task.assignedBy,
+            title: 'Chapter Ready for Publication Review',
+            content: 'All chapter tasks passed Tantou Editor final review and were sent to the Editorial Board queue.',
+            type: 'INFO',
+            taskId: task._id,
+            chapterId: task.chapterId,
+            seriesId: task.seriesId,
+          });
+        }
+      }
 
       if (req.io) {
         req.io.to(task.assignedTo.toString()).emit('notification', approveNotification);
+        if (readyNotification) {
+          req.io.to(task.assignedBy.toString()).emit('notification', readyNotification);
+        }
         req.io.emit('task_approved', task);
         req.io.emit('notification', approveNotification);
+        if (readyNotification) req.io.emit('notification', readyNotification);
       }
 
       return res.status(200).json({
         success: true,
-        message: 'Task received final approval from Editor',
+        message: remainingFinalReviews === 0
+          ? 'Task approved; chapter is ready for Editorial Board publication review'
+          : 'Task received final approval from Editor',
         data: task,
       });
     }
@@ -501,9 +586,17 @@ exports.reviewTask = async (req, res) => {
     if (action === 'REVISION_REQUESTED' || action === 'REJECT') {
       task.status = 'REVISION_REQUESTED';
       task.reviewedAt = new Date();
-      task.reviewNote = reviewNote || 'Revision requested';
+      task.reviewNote = reviewNote.trim();
+      task.reviewHistory.push({
+        reviewerId: req.user._id,
+        reviewerRole: req.user.role,
+        action: 'REVISION_REQUESTED',
+        note: task.reviewNote,
+      });
 
       await task.save();
+
+      await Chapter.findByIdAndUpdate(task.chapterId, { status: 'REVISION_REQUESTED' });
 
       await Page.updateMany(
         {
@@ -518,15 +611,35 @@ exports.reviewTask = async (req, res) => {
 
       const revisionNotification = await Notification.create({
         userId: task.assignedTo,
-        title: 'Task Revision Requested',
-        content: `Revision requested for task "${task.title}": ${reviewNote || 'Please update and resubmit'}`,
+        title: `Task Revision Requested by ${req.user.role === 'MANGAKA' ? 'Mangaka' : 'Tantou Editor'}`,
+        content: `Revision requested for task "${task.title}": ${task.reviewNote}`,
         type: 'WARNING',
+        taskId: task._id,
+        chapterId: task.chapterId,
+        seriesId: task.seriesId,
       });
+
+      let mangakaNotification = null;
+      if (req.user.role === 'EDITOR' || req.user.role === 'ADMIN') {
+        mangakaNotification = await Notification.create({
+          userId: task.assignedBy,
+          title: 'Tantou Editor Requested Revision',
+          content: `Task "${task.title}" was returned for revision: ${task.reviewNote}`,
+          type: 'WARNING',
+          taskId: task._id,
+          chapterId: task.chapterId,
+          seriesId: task.seriesId,
+        });
+      }
 
       if (req.io) {
         req.io.to(task.assignedTo.toString()).emit('notification', revisionNotification);
+        if (mangakaNotification) {
+          req.io.to(task.assignedBy.toString()).emit('notification', mangakaNotification);
+        }
         req.io.emit('task_revision_requested', task);
         req.io.emit('notification', revisionNotification);
+        if (mangakaNotification) req.io.emit('notification', mangakaNotification);
       }
 
       return res.status(200).json({

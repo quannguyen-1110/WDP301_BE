@@ -1,11 +1,27 @@
 const Task = require('../models/Task.js');
 const Page = require('../models/Page.js');
+const Chapter = require('../models/Chapter.js');
 const AssistantEarning = require('../models/AssistantEarning.js');
 const Series = require('../models/Series.js');
 const User = require('../models/User.js');
 const Notification = require('../models/Notification.js');
 const { generateAssistantPageArt } = require('../services/assistantJobService.js');
 const { normalizeUrl, normalizePageImageUrls } = require('../utils/helpers.js');
+
+const syncChapterAfterSubmission = async (chapterId) => {
+  const unfinishedTaskCount = await Task.countDocuments({
+    chapterId,
+    status: {
+      $nin: ['SUBMITTED', 'MANGAKA_APPROVED', 'APPROVED'],
+    },
+  });
+
+  if (unfinishedTaskCount === 0) {
+    await Chapter.findByIdAndUpdate(chapterId, {
+      status: 'SUBMITTED',
+    });
+  }
+};
 
 // @desc    Get current assistant's assigned tasks
 // @route   GET /api/assistant/my-tasks
@@ -138,8 +154,8 @@ exports.uploadPageResult = async (req, res) => {
     }
     await page.save();
 
-    // If the task is still PENDING, update it to IN_PROGRESS
-    if (task.status === 'PENDING') {
+    // Uploading a new result starts or resumes the assigned work.
+    if (['PENDING', 'REVISION_REQUESTED', 'REVISING'].includes(task.status)) {
       task.status = 'IN_PROGRESS';
       await task.save();
       if (req.io) {
@@ -165,8 +181,9 @@ exports.uploadPageResult = async (req, res) => {
 // @access  ASSISTANT
 exports.submitTask = async (req, res) => {
   try {
+    const taskId = req.params.taskId || req.params.id;
     const task = await Task.findOne({
-      _id: req.params.taskId,
+      _id: taskId,
       assignedTo: req.user._id,
       status: { $in: ['PENDING', 'IN_PROGRESS', 'REVISION_REQUESTED', 'REVISING'] },
     }).populate('pageIds');
@@ -240,6 +257,8 @@ exports.submitTask = async (req, res) => {
       }
     );
 
+    await syncChapterAfterSubmission(task.chapterId);
+
     // Fetch updated task with populated details for event/response
     const populatedTask = await Task.findById(task._id)
       .populate('seriesId', 'title')
@@ -252,6 +271,9 @@ exports.submitTask = async (req, res) => {
       content: `Assistant ${req.user.name || 'Assistant'} has submitted the task "${task.title}". Please review it.`,
       type: 'INFO',
       isRead: false,
+      taskId: task._id,
+      chapterId: task.chapterId,
+      seriesId: task.seriesId,
     });
 
     if (req.io) {

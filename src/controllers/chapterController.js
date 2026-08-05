@@ -80,7 +80,14 @@ exports.getAllChapters = async (req, res) => {
 // CREATE CHAPTER
 exports.createChapter = async (req, res) => {
   try {
-    const { seriesId, chapterNumber, title } = req.body;
+    const { seriesId, chapterNumber, title, deadline, dueAt } = req.body;
+
+    if (!seriesId || !Number.isInteger(Number(chapterNumber)) || Number(chapterNumber) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Series and a positive chapter number are required",
+      });
+    }
 
     if (!(await canManageSeries(req.user, seriesId))) {
       return res.status(403).json({
@@ -89,11 +96,38 @@ exports.createChapter = async (req, res) => {
       });
     }
 
-    if (req.body.deadline) {
-      req.body.dueAt = req.body.deadline;
+    const parsedDueAt = new Date(deadline || dueAt);
+    if (Number.isNaN(parsedDueAt.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid chapter deadline is required",
+      });
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDay = new Date(parsedDueAt);
+    if (dueDay < today) {
+      return res.status(400).json({
+        success: false,
+        message: "Chapter deadline cannot be in the past",
+      });
     }
 
-    const chapter = await Chapter.create(req.body);
+    if (await Chapter.exists({ seriesId, chapterNumber: Number(chapterNumber) })) {
+      return res.status(409).json({
+        success: false,
+        message: `Chapter ${chapterNumber} already exists in this series`,
+      });
+    }
+
+    const chapter = await Chapter.create({
+      seriesId,
+      chapterNumber: Number(chapterNumber),
+      title: title?.trim(),
+      dueAt: parsedDueAt,
+      createdBy: req.user._id,
+      status: "IN_PROGRESS",
+    });
 
     // ==================== AUDIT LOG ====================
     await logAction(
@@ -114,6 +148,12 @@ exports.createChapter = async (req, res) => {
       data: chapter,
     });
   } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This chapter number already exists in the series",
+      });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -164,7 +204,7 @@ exports.getChapterById = async (req, res) => {
 // UPDATE CHAPTER
 exports.updateChapter = async (req, res) => {
   try {
-    const existingChapter = await Chapter.findById(req.params.id).select("seriesId");
+    const existingChapter = await Chapter.findById(req.params.id).select("seriesId status");
     if (!existingChapter) {
       return res.status(404).json({ success: false, message: "Chapter not found" });
     }
@@ -187,18 +227,67 @@ exports.updateChapter = async (req, res) => {
     }
 
     if (req.body.status === "SENT_TO_EDITORIAL") {
+      if (!['EDITOR', 'ADMIN'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: "Only the assigned Tantou Editor can complete final chapter review",
+        });
+      }
+
       const tasks = await Task.find({ chapterId: req.params.id }).select("status");
-      if (tasks.length > 0 && tasks.some((task) => !["APPROVED", "MANGAKA_APPROVED", "COMPLETED"].includes(task.status))) {
+      if (tasks.length === 0 || tasks.some((task) => task.status !== "APPROVED")) {
         return res.status(400).json({
           success: false,
-          message: "All tasks in this chapter must be approved first",
+          message: "Every chapter task must receive final Editor approval first",
         });
       }
     }
 
+    const requestedUpdates = { ...req.body };
+    if (requestedUpdates.deadline !== undefined && requestedUpdates.dueAt === undefined) {
+      requestedUpdates.dueAt = requestedUpdates.deadline;
+    }
+
+    const allowedUpdates = ['chapterNumber', 'title', 'dueAt', 'status', 'totalPages'];
+    const updatePayload = Object.fromEntries(
+      Object.entries(requestedUpdates).filter(([key]) => allowedUpdates.includes(key))
+    );
+
+    if (updatePayload.chapterNumber !== undefined) {
+      const chapterNumber = Number(updatePayload.chapterNumber);
+      if (!Number.isInteger(chapterNumber) || chapterNumber <= 0) {
+        return res.status(400).json({ success: false, message: "Invalid chapter number" });
+      }
+      const duplicateChapter = await Chapter.exists({
+        _id: { $ne: req.params.id },
+        seriesId: existingChapter.seriesId,
+        chapterNumber,
+      });
+      if (duplicateChapter) {
+        return res.status(409).json({
+          success: false,
+          message: `Chapter ${chapterNumber} already exists in this series`,
+        });
+      }
+      updatePayload.chapterNumber = chapterNumber;
+    }
+
+    if (updatePayload.dueAt !== undefined) {
+      const parsedDueAt = new Date(updatePayload.dueAt);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (Number.isNaN(parsedDueAt.getTime()) || parsedDueAt < today) {
+        return res.status(400).json({
+          success: false,
+          message: "Chapter deadline must be a valid current or future date",
+        });
+      }
+      updatePayload.dueAt = parsedDueAt;
+    }
+
     const chapter = await Chapter.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updatePayload,
       { new: true, runValidators: true }
     );
 

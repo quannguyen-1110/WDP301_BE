@@ -20,6 +20,7 @@ Thumbs.db
 # build
 dist/
 build/
+backups/
 
 # VSCode (optional)
 .vscode/
