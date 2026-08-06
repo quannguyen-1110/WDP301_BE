@@ -4,6 +4,7 @@ const Task = require("../models/Task.js");
 const Series = require("../models/Series.js");
 const Annotation = require("../models/Annotation.js");
 const Notification = require("../models/Notification.js");
+const Assignment = require("../models/Assignment.js");
 const { logAction } = require('../utils/auditLogger');
 
 const CHAPTER_STATUS = {
@@ -52,13 +53,16 @@ exports.getAllChapters = async (req, res) => {
       if (!seriesId) filter.seriesId = { $in: allowedSeriesIds };
     }
     if (req.user.role === "ASSISTANT") {
-      const allowedChapterIds = await Task.find({ assignedTo: req.user._id })
-        .distinct("chapterId");
+      // Assistant chỉ xem được các chapter được giao qua Task hoặc Assignment
+      const taskChapterIds = await Task.find({ assignedTo: req.user._id }).distinct("chapterId");
+      const assignmentChapterIds = await Assignment.find({ assistantId: req.user._id }).distinct("chapterId");
+      const allowedChapterIds = [...new Set([...taskChapterIds, ...assignmentChapterIds])];
       filter._id = { $in: allowedChapterIds };
     }
 
     const chapters = await Chapter.find(filter)
       .populate("seriesId", "title")
+      .populate("volumeId", "volumeNumber title")
       .sort({ createdAt: 1 });
     const chapterData = await Promise.all(
       chapters.map(async (chapter) => ({
@@ -80,7 +84,7 @@ exports.getAllChapters = async (req, res) => {
 // CREATE CHAPTER
 exports.createChapter = async (req, res) => {
   try {
-    const { seriesId, chapterNumber, title, deadline, dueAt } = req.body;
+    const { seriesId, volumeId, chapterNumber, title, deadline, dueAt } = req.body;
 
     if (!seriesId || !Number.isInteger(Number(chapterNumber)) || Number(chapterNumber) <= 0) {
       return res.status(400).json({
@@ -94,6 +98,18 @@ exports.createChapter = async (req, res) => {
         success: false,
         message: "You can only create chapters for a series you manage",
       });
+    }
+
+    // Nếu có volumeId, kiểm tra volume thuộc series này
+    if (volumeId) {
+      const Volume = require("../models/Volume.js");
+      const belongs = await Volume.exists({ _id: volumeId, seriesId });
+      if (!belongs) {
+        return res.status(400).json({
+          success: false,
+          message: "Volume does not belong to the selected series",
+        });
+      }
     }
 
     const parsedDueAt = new Date(deadline || dueAt);
@@ -122,12 +138,22 @@ exports.createChapter = async (req, res) => {
 
     const chapter = await Chapter.create({
       seriesId,
+      volumeId: volumeId || null,
       chapterNumber: Number(chapterNumber),
       title: title?.trim(),
       dueAt: parsedDueAt,
       createdBy: req.user._id,
       status: "IN_PROGRESS",
     });
+
+    // Cập nhật totalChapters của volume nếu có
+    if (volumeId) {
+      const Volume = require("../models/Volume.js");
+      await Volume.updateOne(
+        { _id: volumeId },
+        { $inc: { totalChapters: 1 } }
+      );
+    }
 
     // ==================== AUDIT LOG ====================
     await logAction(
@@ -178,14 +204,15 @@ exports.getChapterById = async (req, res) => {
         });
       }
     }
-    if (
-      req.user.role === "ASSISTANT" &&
-      !(await Task.exists({ chapterId: chapter._id, assignedTo: req.user._id }))
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "You do not have access to this chapter",
-      });
+    if (req.user.role === "ASSISTANT") {
+      const hasTask = await Task.exists({ chapterId: chapter._id, assignedTo: req.user._id });
+      const hasAssignment = await Assignment.exists({ chapterId: chapter._id, assistantId: req.user._id });
+      if (!hasTask && !hasAssignment) {
+        return res.status(403).json({
+          success: false,
+          message: "You do not have access to this chapter",
+        });
+      }
     }
 
     const pages = await getPagesWithAnnotations(chapter._id);
@@ -248,7 +275,7 @@ exports.updateChapter = async (req, res) => {
       requestedUpdates.dueAt = requestedUpdates.deadline;
     }
 
-    const allowedUpdates = ['chapterNumber', 'title', 'dueAt', 'status', 'totalPages'];
+    const allowedUpdates = ['chapterNumber', 'title', 'dueAt', 'status', 'totalPages', 'volumeId'];
     const updatePayload = Object.fromEntries(
       Object.entries(requestedUpdates).filter(([key]) => allowedUpdates.includes(key))
     );

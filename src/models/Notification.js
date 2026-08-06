@@ -44,12 +44,23 @@ const notificationSchema = new mongoose.Schema(
     // What kind of entity this notification refers to.
     targetType: {
       type: String,
-      enum: ["PROPOSAL", "CHAPTER", "SERIES", "TASK", null],
+      enum: ["PROPOSAL", "CHAPTER", "SERIES", "TASK", "ASSIGNMENT", "FEEDBACK", null],
       default: null,
     },
     // ID of the target entity (proposalId / chapterId / seriesId / taskId).
     targetId: {
       type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    // ===== Extended references (Feedback / Assignment) =====
+    feedbackId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Feedback",
+      default: null,
+    },
+    assignmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Assignment",
       default: null,
     },
   },
