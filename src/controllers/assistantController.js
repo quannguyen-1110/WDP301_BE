@@ -31,7 +31,7 @@ exports.getMyTasks = async (req, res) => {
     const tasks = await Task.find({ assignedTo: req.user._id })
       .populate('seriesId', 'title imageUrl')
       .populate('chapterId', 'title chapterNumber')
-      .populate('pageIds', 'pageNumber imageUrl assistantImageUrl status')
+      .populate('pageIds', 'pageNumber imageUrl assistantImageUrl status resources note')
       .sort({ createdAt: -1 });
 
     // Normalize all image URLs in pages so the assistant can view them

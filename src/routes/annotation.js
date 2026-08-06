@@ -6,6 +6,7 @@ const {
   createAnnotation,
   getAnnotationsByPage,
   updateAnnotation,
+  resolveAnnotation,
   deleteAnnotation,
 } = require('../controllers/annotationController.js');
 
@@ -26,6 +27,11 @@ router.get('/page/:pageId', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT',
  * Update annotation
  */
 router.put('/:id', authorize('ADMIN', 'EDITOR', 'MANGAKA'), updateAnnotation);
+
+/**
+ * Resolve or reopen annotation
+ */
+router.put('/:id/resolve', authorize('ADMIN', 'EDITOR', 'MANGAKA'), resolveAnnotation);
 
 /**
  * Delete annotation

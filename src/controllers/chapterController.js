@@ -6,6 +6,7 @@ const Annotation = require("../models/Annotation.js");
 const Notification = require("../models/Notification.js");
 const Assignment = require("../models/Assignment.js");
 const { logAction } = require('../utils/auditLogger');
+const { normalizeUrl } = require('../utils/helpers.js');
 
 const CHAPTER_STATUS = {
   IN_PROGRESS: "IN_PROGRESS",
@@ -367,6 +368,81 @@ exports.updateChapter = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Submit a manga page for the assigned editor to review.
+exports.submitPageToEditor = async (req, res) => {
+  try {
+    const { imageUrl, note } = req.body || {};
+    if (!imageUrl?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'A page image is required',
+      });
+    }
+
+    const chapter = await Chapter.findById(req.params.id);
+    if (!chapter) {
+      return res.status(404).json({ success: false, message: 'Chapter not found' });
+    }
+    if (!(await canManageSeries(req.user, chapter.seriesId))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only submit pages for a series you manage',
+      });
+    }
+
+    const latestPage = await Page.findOne({ chapterId: chapter._id })
+      .sort({ pageNumber: -1 })
+      .select('pageNumber');
+    const page = await Page.create({
+      chapterId: chapter._id,
+      pageNumber: (latestPage?.pageNumber || 0) + 1,
+      imageUrl: normalizeUrl(imageUrl.trim(), req),
+      note: note?.trim() || '',
+      status: 'DRAFT',
+    });
+
+    chapter.status = 'SUBMITTED';
+    chapter.totalPages = await Page.countDocuments({ chapterId: chapter._id });
+    await chapter.save();
+
+    const series = await Series.findById(chapter.seriesId).select('title editorId');
+    if (series?.editorId) {
+      const notification = await Notification.create({
+        userId: series.editorId,
+        title: 'Chapter Page Submitted',
+        content: `A new page was submitted for Chapter ${chapter.chapterNumber} of "${series.title}".`,
+        type: 'INFO',
+        targetType: 'CHAPTER',
+        targetId: chapter._id,
+        link: `/editor/review/${chapter.seriesId}`,
+      });
+      if (req.io) {
+        req.io.to(series.editorId.toString()).emit('notification', notification);
+      }
+    }
+
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      'Submitted Chapter Page',
+      `Chapter ${chapter.chapterNumber}`,
+      `Page ${page.pageNumber}`,
+    );
+
+    if (req.io) {
+      req.io.emit('chapter_updated', chapter);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Page submitted to editor successfully',
+      data: { page, chapter },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 

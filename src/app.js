@@ -68,7 +68,9 @@ const setupApp = (io) => {
   app.use('/api/volumes', protect, volumeRoutes);
   app.use('/api/feedback', protect, feedbackRoutes);
   app.use('/api/assignments', protect, assignmentRoutes);
-  app.use('/api/reader', protect, readerRoutes);
+  // Public catalogue endpoints only expose featured series and published
+  // chapters/pages; production manuscripts remain behind authenticated APIs.
+  app.use('/api/reader', readerRoutes);
   app.use('/api/ratings', protect, ratingRoutes);
   app.use('/api/ranks', protect, rankRoutes);
   app.use('/api/votes', protect, voteRoutes);

@@ -8,6 +8,7 @@ const {
   updateChapter,
   deleteChapter,
   publishChapter,
+  submitPageToEditor,
   getChapterById,
 } = require('../controllers/chapterController.js');
 
@@ -37,6 +38,12 @@ router.post('/', authorize('ADMIN', 'MANGAKA'), createChapter);
  * Update chapter
  */
 router.put('/:id', authorize('ADMIN', 'MANGAKA', 'EDITOR'), updateChapter);
+
+router.post(
+  '/:id/submit-page',
+  authorize('ADMIN', 'MANGAKA'),
+  submitPageToEditor,
+);
 
 /**
  * Delete chapter
