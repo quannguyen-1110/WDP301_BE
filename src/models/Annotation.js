@@ -37,6 +37,10 @@ const annotationSchema = new mongoose.Schema(
       enum: ANNOTATION_TYPE,
       required: true,
     },
+    resolved: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true },
 );

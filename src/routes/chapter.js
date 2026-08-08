@@ -9,6 +9,7 @@ const {
   deleteChapter,
   publishChapter,
   getChapterById,
+  submitPageToEditor,
 } = require('../controllers/chapterController.js');
 
 // Protect all routes
@@ -30,6 +31,11 @@ router.post('/', authorize('ADMIN', 'MANGAKA'), createChapter);
  * Update chapter
  */
 router.put('/:id', authorize('ADMIN', 'MANGAKA', 'EDITOR'), updateChapter);
+
+/**
+ * Submit a page to the editor (no task required)
+ */
+router.post('/:id/submit-page', authorize('ADMIN', 'MANGAKA'), submitPageToEditor);
 
 /**
  * Delete chapter

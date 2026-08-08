@@ -89,9 +89,11 @@ exports.getProposals = async (req, res) => {
 
     // Blind review: board members never see the mangaka identity
     const shouldHideAuthor = req.user.role === 'BOARD_MEMBER';
-    const proposals = await SeriesProposal.find(filter)
-      .populate(shouldHideAuthor ? '' : 'mangakaId', 'name email')
-      .sort({ submittedAt: -1 });
+    let query = SeriesProposal.find(filter).sort({ submittedAt: -1 });
+    if (!shouldHideAuthor) {
+      query = query.populate('mangakaId', 'name email');
+    }
+    const proposals = await query;
 
     res.status(200).json({
       success: true,
@@ -113,10 +115,11 @@ exports.getProposalById = async (req, res) => {
   try {
     // Blind review: board members never see the mangaka identity
     const shouldHideAuthor = req.user.role === 'BOARD_MEMBER';
-    const proposal = await SeriesProposal.findById(req.params.id).populate(
-      shouldHideAuthor ? '' : 'mangakaId',
-      'name email',
-    );
+    let query = SeriesProposal.findById(req.params.id);
+    if (!shouldHideAuthor) {
+      query = query.populate('mangakaId', 'name email');
+    }
+    const proposal = await query;
 
     if (!proposal) {
       return res.status(404).json({
@@ -616,6 +619,9 @@ exports.approveProposal = async (req, res) => {
       title: "Proposal Approved by Board",
       content: `Congratulations! Your proposal "${proposal.title}" has been approved by the Editorial Board.`,
       type: "INFO",
+      link: `/editor/proposals/${proposal._id}`,
+      targetType: "PROPOSAL",
+      targetId: proposal._id,
     });
 
     if (req.io) {

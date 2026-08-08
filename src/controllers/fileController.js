@@ -91,6 +91,9 @@ exports.uploadFile = async (req, res) => {
 exports.getAllFiles = async (req, res) => {
   try {
     const filter = {};
+    if (req.query.chapterId) {
+      filter.chapterId = req.query.chapterId;
+    }
     if (req.user.role === "MANGAKA" || req.user.role === "EDITOR") {
       const seriesFilter = req.user.role === "MANGAKA"
         ? { mangakaId: req.user._id }

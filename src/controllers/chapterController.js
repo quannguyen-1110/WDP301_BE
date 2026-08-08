@@ -343,6 +343,83 @@ exports.updateChapter = async (req, res) => {
   }
 };
 
+// @desc    Mangaka submits a page image directly to the editor (no task needed)
+// @route   POST /api/chapters/:id/submit-page
+// @access  MANGAKA, ADMIN
+exports.submitPageToEditor = async (req, res) => {
+  try {
+    const chapter = await Chapter.findById(req.params.id);
+    if (!chapter) {
+      return res.status(404).json({ success: false, message: "Chapter not found" });
+    }
+    if (!(await canManageSeries(req.user, chapter.seriesId))) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only submit pages for a series you manage",
+      });
+    }
+
+    const { imageUrl, note } = req.body;
+    if (!imageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "imageUrl is required — upload the page image first",
+      });
+    }
+
+    const latestPage = await Page.findOne({ chapterId: chapter._id }).sort({ pageNumber: -1 });
+    const page = await Page.create({
+      chapterId: chapter._id,
+      pageNumber: (latestPage?.pageNumber || 0) + 1,
+      imageUrl,
+      status: "COMPLETED",
+      note: note || "",
+    });
+
+    const annotations = [];
+
+    if (chapter.status === "IN_PROGRESS" || chapter.status === "COMPLETED") {
+      chapter.status = "SUBMITTED";
+    }
+    chapter.totalPages = await Page.countDocuments({ chapterId: chapter._id });
+    await chapter.save();
+
+    // Notify the assigned editor.
+    const series = await Series.findById(chapter.seriesId).select("title editorId mangakaId");
+    if (series?.editorId) {
+      const notification = await Notification.create({
+        userId: series.editorId,
+        title: "Chapter Submitted for Review",
+        content: `${series.title} — Chapter ${chapter.chapterNumber} was submitted by the Mangaka.`,
+        type: "INFO",
+        link: `/editor/review/${chapter.seriesId}`,
+        targetType: "CHAPTER",
+        targetId: chapter._id,
+      });
+      if (req.io) {
+        req.io.to(series.editorId.toString()).emit("notification", notification);
+      }
+    }
+
+    // ==================== AUDIT LOG ====================
+    await logAction(
+      req.user._id,
+      req.user.name || "Unknown",
+      "Submitted Page to Editor",
+      `Page ${page.pageNumber} - Chapter ${chapter.chapterNumber}`,
+      `Chapter ID: ${chapter._id}`
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Page submitted to the editor for review",
+      data: { page, annotations, chapter },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // DELETE CHAPTER
 exports.deleteChapter = async (req, res) => {
   try {
