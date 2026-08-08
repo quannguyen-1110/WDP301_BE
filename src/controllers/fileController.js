@@ -5,6 +5,7 @@ const axios = require("axios");
 const Task = require("../models/Task");
 const Chapter = require("../models/Chapter");
 const Series = require("../models/Series");
+const Assignment = require("../models/Assignment");
 const { logAction } = require('../utils/auditLogger');
 
 const canAccessFile = async (file, user) => {
@@ -13,9 +14,13 @@ const canAccessFile = async (file, user) => {
   }
   if (!file.chapterId) return false;
   if (user.role === "ASSISTANT") {
+    // Assistant có thể truy cập nếu được giao task (Task) hoặc được mangaka mời (Assignment)
     return Boolean(await Task.exists({
       chapterId: file.chapterId,
       assignedTo: user._id,
+    })) || Boolean(await Assignment.exists({
+      chapterId: file.chapterId,
+      assistantId: user._id,
     }));
   }
   const chapter = await Chapter.findById(file.chapterId).select("seriesId");
@@ -105,7 +110,9 @@ exports.getAllFiles = async (req, res) => {
         { chapterId: { $in: chapterIds } },
       ];
     } else if (req.user.role === "ASSISTANT") {
-      const chapterIds = await Task.find({ assignedTo: req.user._id }).distinct("chapterId");
+      const taskChapterIds = await Task.find({ assignedTo: req.user._id }).distinct("chapterId");
+      const assignmentChapterIds = await Assignment.find({ assistantId: req.user._id }).distinct("chapterId");
+      const chapterIds = [...new Set([...taskChapterIds, ...assignmentChapterIds])];
       filter.$or = [
         { uploadedBy: req.user._id },
         { chapterId: { $in: chapterIds } },

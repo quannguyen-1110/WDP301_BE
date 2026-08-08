@@ -8,6 +8,9 @@ const authRoutes = require('./routes/auth.js');
 const seriesRoutes = require('./routes/series.js');
 const taskRoutes = require('./routes/task.js');
 const chapterRoutes = require('./routes/chapter.js');
+const volumeRoutes = require('./routes/volume.js');
+const feedbackRoutes = require('./routes/feedback.js');
+const assignmentRoutes = require('./routes/assignment.js');
 const ratingRoutes = require('./routes/rating.js');
 const rankRoutes = require('./routes/rank.js');
 const voteRoutes = require('./routes/vote.js');
@@ -62,7 +65,12 @@ const setupApp = (io) => {
   app.use('/api/series', protect, seriesRoutes);
   app.use('/api/tasks', protect, taskRoutes);
   app.use('/api/chapters', protect, chapterRoutes);
-  app.use('/api/reader', protect, readerRoutes);
+  app.use('/api/volumes', protect, volumeRoutes);
+  app.use('/api/feedback', protect, feedbackRoutes);
+  app.use('/api/assignments', protect, assignmentRoutes);
+  // Public catalogue endpoints only expose featured series and published
+  // chapters/pages; production manuscripts remain behind authenticated APIs.
+  app.use('/api/reader', readerRoutes);
   app.use('/api/ratings', protect, ratingRoutes);
   app.use('/api/ranks', protect, rankRoutes);
   app.use('/api/votes', protect, voteRoutes);
@@ -108,7 +116,6 @@ const setupApp = (io) => {
           : 'Unsupported or invalid upload',
       });
     }
-
 
     res.status(500).json({
       success: false,

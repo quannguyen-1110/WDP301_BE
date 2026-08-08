@@ -215,6 +215,50 @@ exports.updateAnnotation = async (req, res) => {
   }
 };
 
+// @desc    Mark an annotation as resolved/unresolved
+// @route   PUT /api/annotations/:id/resolve
+exports.resolveAnnotation = async (req, res) => {
+  try {
+    const annotation = await Annotation.findById(req.params.id);
+    if (!annotation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Annotation not found',
+      });
+    }
+
+    if (!(await canManagePage(req.user, annotation.pageId))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to resolve this annotation',
+      });
+    }
+
+    const resolved = req.body?.resolved !== false;
+    annotation.resolved = resolved;
+    annotation.resolvedAt = resolved ? new Date() : null;
+    annotation.resolvedBy = resolved ? req.user._id : null;
+    await annotation.save();
+    await annotation.populate('annotatorId', 'name email role');
+
+    await logAction(
+      req.user._id,
+      req.user.name || 'Unknown',
+      resolved ? 'Resolved Annotation' : 'Reopened Annotation',
+      `Annotation ID: ${req.params.id}`,
+      `Page ID: ${annotation.pageId}`,
+    );
+
+    if (req.io) {
+      req.io.emit('annotation_updated', annotation);
+    }
+
+    return res.status(200).json({ success: true, data: annotation });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Delete an annotation
 exports.deleteAnnotation = async (req, res) => {
   try {

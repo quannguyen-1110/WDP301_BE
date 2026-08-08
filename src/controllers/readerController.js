@@ -7,6 +7,8 @@ const readableSeriesFilter = {
   status: { $nin: ['REJECTED', 'CANCELLED'] },
 };
 
+const readableChapterFilter = { status: 'PUBLISHED' };
+
 const seriesFields = [
   'title', 'synopsis', 'genre', 'tags', 'originalTitle', 'localizedTitle',
   'originalAuthor', 'publicationYear', 'imageUrl', 'bannerUrl', 'status',
@@ -43,11 +45,12 @@ exports.getCatalogue = async (req, res) => {
       .select(seriesFields)
       .sort({ isCatalogFeatured: -1, title: 1 })
       .lean();
-    const seriesIds = series.map((item) => item._id);
+const seriesIds = series.map((item) => item._id);
     const chapters = await Chapter.find({
-      seriesId: { $in: seriesIds }, status: { $ne: 'ARCHIVED' },
+      seriesId: { $in: seriesIds }, ...readableChapterFilter,
     })
-      .select('seriesId chapterNumber status publishedAt')
+      .select('seriesId chapterNumber title status publishedAt volumeId')
+      .populate('volumeId', 'volumeNumber title')
       .sort({ chapterNumber: 1 })
       .lean();
     const pageCounts = await pageCountsForChapters(
@@ -78,9 +81,10 @@ exports.getSeries = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Series not found' });
     }
     const chapters = await Chapter.find({
-      seriesId: series._id, status: { $ne: 'ARCHIVED' },
+      seriesId: series._id, ...readableChapterFilter,
     })
-      .select('seriesId chapterNumber title status publishedAt createdAt')
+      .select('seriesId chapterNumber title status publishedAt createdAt volumeId')
+      .populate('volumeId', 'volumeNumber title')
       .sort({ chapterNumber: 1 })
       .lean();
     const pageCounts = await pageCountsForChapters(
@@ -104,7 +108,7 @@ exports.getSeries = async (req, res) => {
 exports.getChapter = async (req, res) => {
   try {
     const chapter = await Chapter.findById(req.params.id).lean();
-    if (!chapter || chapter.status === 'ARCHIVED') {
+    if (!chapter || chapter.status !== 'PUBLISHED') {
       return res.status(404).json({ success: false, message: 'Chapter not found' });
     }
     const series = await Series.findOne({

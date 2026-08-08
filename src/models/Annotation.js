@@ -41,6 +41,15 @@ const annotationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    resolvedAt: {
+      type: Date,
+      default: null,
+    },
+    resolvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true },
 );

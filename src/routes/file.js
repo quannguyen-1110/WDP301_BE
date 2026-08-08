@@ -6,6 +6,7 @@ const File = require("../models/File");
 const Chapter = require("../models/Chapter");
 const Series = require("../models/Series");
 const Task = require("../models/Task");
+const Assignment = require("../models/Assignment");
 const fs = require("fs");
 const {
   downloadFile,
@@ -16,11 +17,12 @@ const {
 router.use(protect);
 
 /**
- * Upload file (ADMIN + MANGAKA + ASSISTANT)
+ * Upload file (Chỉ ADMIN + MANGAKA + ASSISTANT)
+ * Editor & Board chỉ xem, không upload.
  */
 router.post(
   "/upload",
-  authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR', 'BOARD_MEMBER'),
+  authorize('ADMIN', 'MANGAKA', 'ASSISTANT'),
   upload.single("file"),
   async (req, res) => {
     try {
@@ -41,9 +43,13 @@ router.post(
           }));
         }
         if (allowed && req.user.role === "ASSISTANT") {
+          // Assistant được phép upload nếu được giao task (Task) hoặc được mangaka mời (Assignment)
           allowed = Boolean(await Task.exists({
             chapterId: chapter._id,
             assignedTo: req.user._id,
+          })) || Boolean(await Assignment.exists({
+            chapterId: chapter._id,
+            assistantId: req.user._id,
           }));
         }
         if (!allowed) {
@@ -92,20 +98,22 @@ router.post(
   }
 );
 
-router.get("/", authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT'), getAllFiles);
+// Xem danh sách file (tất cả roles - view only)
+router.get("/", authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA', 'ASSISTANT'), getAllFiles);
 
 /**
- * Download file
+ * Download file (Chỉ ADMIN + MANGAKA + ASSISTANT)
+ * Editor & Board chỉ xem nội dung trên web, không download.
  */
 router.get(
   "/download/:id",
-  authorize('ADMIN', 'MANGAKA', 'ASSISTANT', 'EDITOR'),
+  authorize('ADMIN', 'MANGAKA', 'ASSISTANT'),
   downloadFile,
 );
 
 /**
- * Get file detail
+ * Get file detail (xem - tất cả roles)
  */
-router.get("/:id", authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT'), getFile);
+router.get("/:id", authorize('ADMIN', 'EDITOR', 'BOARD_MEMBER', 'MANGAKA', 'ASSISTANT'), getFile);
 
 module.exports = router;
