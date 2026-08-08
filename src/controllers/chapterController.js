@@ -3,7 +3,10 @@ const Page = require("../models/Page.js");
 const Task = require("../models/Task.js");
 const Series = require("../models/Series.js");
 const Annotation = require("../models/Annotation.js");
+const Notification = require("../models/Notification.js");
+const Assignment = require("../models/Assignment.js");
 const { logAction } = require('../utils/auditLogger');
+const { normalizeUrl } = require('../utils/helpers.js');
 
 const CHAPTER_STATUS = {
   IN_PROGRESS: "IN_PROGRESS",
@@ -51,13 +54,16 @@ exports.getAllChapters = async (req, res) => {
       if (!seriesId) filter.seriesId = { $in: allowedSeriesIds };
     }
     if (req.user.role === "ASSISTANT") {
-      const allowedChapterIds = await Task.find({ assignedTo: req.user._id })
-        .distinct("chapterId");
+      // Assistant chỉ xem được các chapter được giao qua Task hoặc Assignment
+      const taskChapterIds = await Task.find({ assignedTo: req.user._id }).distinct("chapterId");
+      const assignmentChapterIds = await Assignment.find({ assistantId: req.user._id }).distinct("chapterId");
+      const allowedChapterIds = [...new Set([...taskChapterIds, ...assignmentChapterIds])];
       filter._id = { $in: allowedChapterIds };
     }
 
     const chapters = await Chapter.find(filter)
       .populate("seriesId", "title")
+      .populate("volumeId", "volumeNumber title")
       .sort({ createdAt: 1 });
     const chapterData = await Promise.all(
       chapters.map(async (chapter) => ({
@@ -79,7 +85,14 @@ exports.getAllChapters = async (req, res) => {
 // CREATE CHAPTER
 exports.createChapter = async (req, res) => {
   try {
-    const { seriesId, chapterNumber, title } = req.body;
+    const { seriesId, volumeId, chapterNumber, title, deadline, dueAt } = req.body;
+
+    if (!seriesId || !Number.isInteger(Number(chapterNumber)) || Number(chapterNumber) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Series and a positive chapter number are required",
+      });
+    }
 
     if (!(await canManageSeries(req.user, seriesId))) {
       return res.status(403).json({
@@ -88,11 +101,60 @@ exports.createChapter = async (req, res) => {
       });
     }
 
-    if (req.body.deadline) {
-      req.body.dueAt = req.body.deadline;
+    // Nếu có volumeId, kiểm tra volume thuộc series này
+    if (volumeId) {
+      const Volume = require("../models/Volume.js");
+      const belongs = await Volume.exists({ _id: volumeId, seriesId });
+      if (!belongs) {
+        return res.status(400).json({
+          success: false,
+          message: "Volume does not belong to the selected series",
+        });
+      }
     }
 
-    const chapter = await Chapter.create(req.body);
+    const parsedDueAt = new Date(deadline || dueAt);
+    if (Number.isNaN(parsedDueAt.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid chapter deadline is required",
+      });
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDay = new Date(parsedDueAt);
+    if (dueDay < today) {
+      return res.status(400).json({
+        success: false,
+        message: "Chapter deadline cannot be in the past",
+      });
+    }
+
+    if (await Chapter.exists({ seriesId, chapterNumber: Number(chapterNumber) })) {
+      return res.status(409).json({
+        success: false,
+        message: `Chapter ${chapterNumber} already exists in this series`,
+      });
+    }
+
+    const chapter = await Chapter.create({
+      seriesId,
+      volumeId: volumeId || null,
+      chapterNumber: Number(chapterNumber),
+      title: title?.trim(),
+      dueAt: parsedDueAt,
+      createdBy: req.user._id,
+      status: "IN_PROGRESS",
+    });
+
+    // Cập nhật totalChapters của volume nếu có
+    if (volumeId) {
+      const Volume = require("../models/Volume.js");
+      await Volume.updateOne(
+        { _id: volumeId },
+        { $inc: { totalChapters: 1 } }
+      );
+    }
 
     // ==================== AUDIT LOG ====================
     await logAction(
@@ -113,6 +175,12 @@ exports.createChapter = async (req, res) => {
       data: chapter,
     });
   } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This chapter number already exists in the series",
+      });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -137,14 +205,15 @@ exports.getChapterById = async (req, res) => {
         });
       }
     }
-    if (
-      req.user.role === "ASSISTANT" &&
-      !(await Task.exists({ chapterId: chapter._id, assignedTo: req.user._id }))
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "You do not have access to this chapter",
-      });
+    if (req.user.role === "ASSISTANT") {
+      const hasTask = await Task.exists({ chapterId: chapter._id, assignedTo: req.user._id });
+      const hasAssignment = await Assignment.exists({ chapterId: chapter._id, assistantId: req.user._id });
+      if (!hasTask && !hasAssignment) {
+        return res.status(403).json({
+          success: false,
+          message: "You do not have access to this chapter",
+        });
+      }
     }
 
     const pages = await getPagesWithAnnotations(chapter._id);
@@ -163,7 +232,7 @@ exports.getChapterById = async (req, res) => {
 // UPDATE CHAPTER
 exports.updateChapter = async (req, res) => {
   try {
-    const existingChapter = await Chapter.findById(req.params.id).select("seriesId");
+    const existingChapter = await Chapter.findById(req.params.id).select("seriesId status");
     if (!existingChapter) {
       return res.status(404).json({ success: false, message: "Chapter not found" });
     }
@@ -186,23 +255,98 @@ exports.updateChapter = async (req, res) => {
     }
 
     if (req.body.status === "SENT_TO_EDITORIAL") {
+      if (!['EDITOR', 'ADMIN'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: "Only the assigned Tantou Editor can complete final chapter review",
+        });
+      }
+
       const tasks = await Task.find({ chapterId: req.params.id }).select("status");
-      if (tasks.length > 0 && tasks.some((task) => !["APPROVED", "MANGAKA_APPROVED", "COMPLETED"].includes(task.status))) {
+      if (tasks.length === 0 || tasks.some((task) => task.status !== "APPROVED")) {
         return res.status(400).json({
           success: false,
-          message: "All tasks in this chapter must be approved first",
+          message: "Every chapter task must receive final Editor approval first",
         });
       }
     }
 
+    const requestedUpdates = { ...req.body };
+    if (requestedUpdates.deadline !== undefined && requestedUpdates.dueAt === undefined) {
+      requestedUpdates.dueAt = requestedUpdates.deadline;
+    }
+
+    const allowedUpdates = ['chapterNumber', 'title', 'dueAt', 'status', 'totalPages', 'volumeId'];
+    const updatePayload = Object.fromEntries(
+      Object.entries(requestedUpdates).filter(([key]) => allowedUpdates.includes(key))
+    );
+
+    if (updatePayload.chapterNumber !== undefined) {
+      const chapterNumber = Number(updatePayload.chapterNumber);
+      if (!Number.isInteger(chapterNumber) || chapterNumber <= 0) {
+        return res.status(400).json({ success: false, message: "Invalid chapter number" });
+      }
+      const duplicateChapter = await Chapter.exists({
+        _id: { $ne: req.params.id },
+        seriesId: existingChapter.seriesId,
+        chapterNumber,
+      });
+      if (duplicateChapter) {
+        return res.status(409).json({
+          success: false,
+          message: `Chapter ${chapterNumber} already exists in this series`,
+        });
+      }
+      updatePayload.chapterNumber = chapterNumber;
+    }
+
+    if (updatePayload.dueAt !== undefined) {
+      const parsedDueAt = new Date(updatePayload.dueAt);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (Number.isNaN(parsedDueAt.getTime()) || parsedDueAt < today) {
+        return res.status(400).json({
+          success: false,
+          message: "Chapter deadline must be a valid current or future date",
+        });
+      }
+      updatePayload.dueAt = parsedDueAt;
+    }
+
     const chapter = await Chapter.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updatePayload,
       { new: true, runValidators: true }
     );
 
     if (!chapter) {
       return res.status(404).json({ success: false, message: "Chapter not found" });
+    }
+
+    // ===== Chapter Revision Notification =====
+    // When an editor requests a revision for a chapter, notify the mangaka
+    // (and any assigned assistants) with a deep-link to the chapter workspace.
+    if (req.body.status === 'REVISION_REQUESTED') {
+      const series = await Series.findById(chapter.seriesId).select('title mangakaId editorId');
+      const recipients = [series?.mangakaId, series?.editorId].filter(Boolean);
+      const uniqueRecipients = [...new Set(recipients.map((id) => id.toString()))];
+
+      const notifications = await Notification.insertMany(
+        uniqueRecipients.map((userId) => ({
+          userId,
+          title: 'Chapter Revision Requested',
+          content: `Editor requested revision for Chapter ${chapter.chapterNumber} of "${series?.title || 'Series'}". Please review the annotations and revise.`,
+          type: 'WARNING',
+          link: `/editor/review/${chapter.seriesId}`,
+          targetType: 'CHAPTER',
+          targetId: chapter._id,
+        })),
+      );
+      if (req.io) {
+        notifications.forEach((notification) => {
+          req.io.to(notification.userId.toString()).emit('notification', notification);
+        });
+      }
     }
 
     await logAction(
@@ -221,6 +365,83 @@ exports.updateChapter = async (req, res) => {
       success: true,
       message: "Chapter updated successfully",
       data: chapter,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Mangaka submits a page image directly to the editor (no task needed)
+// @route   POST /api/chapters/:id/submit-page
+// @access  MANGAKA, ADMIN
+exports.submitPageToEditor = async (req, res) => {
+  try {
+    const chapter = await Chapter.findById(req.params.id);
+    if (!chapter) {
+      return res.status(404).json({ success: false, message: "Chapter not found" });
+    }
+    if (!(await canManageSeries(req.user, chapter.seriesId))) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only submit pages for a series you manage",
+      });
+    }
+
+    const { imageUrl, note } = req.body;
+    if (!imageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "imageUrl is required — upload the page image first",
+      });
+    }
+
+    const latestPage = await Page.findOne({ chapterId: chapter._id }).sort({ pageNumber: -1 });
+    const page = await Page.create({
+      chapterId: chapter._id,
+      pageNumber: (latestPage?.pageNumber || 0) + 1,
+      imageUrl,
+      status: "COMPLETED",
+      note: note || "",
+    });
+
+    const annotations = [];
+
+    if (chapter.status === "IN_PROGRESS" || chapter.status === "COMPLETED") {
+      chapter.status = "SUBMITTED";
+    }
+    chapter.totalPages = await Page.countDocuments({ chapterId: chapter._id });
+    await chapter.save();
+
+    // Notify the assigned editor.
+    const series = await Series.findById(chapter.seriesId).select("title editorId mangakaId");
+    if (series?.editorId) {
+      const notification = await Notification.create({
+        userId: series.editorId,
+        title: "Chapter Submitted for Review",
+        content: `${series.title} — Chapter ${chapter.chapterNumber} was submitted by the Mangaka.`,
+        type: "INFO",
+        link: `/editor/review/${chapter.seriesId}`,
+        targetType: "CHAPTER",
+        targetId: chapter._id,
+      });
+      if (req.io) {
+        req.io.to(series.editorId.toString()).emit("notification", notification);
+      }
+    }
+
+    // ==================== AUDIT LOG ====================
+    await logAction(
+      req.user._id,
+      req.user.name || "Unknown",
+      "Submitted Page to Editor",
+      `Page ${page.pageNumber} - Chapter ${chapter.chapterNumber}`,
+      `Chapter ID: ${chapter._id}`
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Page submitted to the editor for review",
+      data: { page, annotations, chapter },
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

@@ -5,7 +5,9 @@ const { protect, authorize } = require('../middleware/auth.js');
 const {
   createAnnotation,
   getAnnotationsByPage,
+  resolveAnnotation,
   updateAnnotation,
+  resolveAnnotation,
   deleteAnnotation,
 } = require('../controllers/annotationController.js');
 
@@ -26,6 +28,11 @@ router.get('/page/:pageId', authorize('ADMIN', 'EDITOR', 'MANGAKA', 'ASSISTANT',
  * Update annotation
  */
 router.put('/:id', authorize('ADMIN', 'EDITOR', 'MANGAKA'), updateAnnotation);
+
+/**
+ * Resolve / unresolve annotation
+ */
+router.put('/:id/resolve', authorize('ADMIN', 'EDITOR', 'MANGAKA'), resolveAnnotation);
 
 /**
  * Delete annotation

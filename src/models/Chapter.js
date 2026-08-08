@@ -20,6 +20,13 @@ const chapterSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Chapter thuộc Volume nào (Series -> Volume -> Chapter)
+    volumeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Volume",
+      default: null,
+    },
+
     chapterNumber: {
       type: Number,
       required: true,

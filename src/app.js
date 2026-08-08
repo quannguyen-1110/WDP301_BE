@@ -8,6 +8,9 @@ const authRoutes = require('./routes/auth.js');
 const seriesRoutes = require('./routes/series.js');
 const taskRoutes = require('./routes/task.js');
 const chapterRoutes = require('./routes/chapter.js');
+const volumeRoutes = require('./routes/volume.js');
+const feedbackRoutes = require('./routes/feedback.js');
+const assignmentRoutes = require('./routes/assignment.js');
 const ratingRoutes = require('./routes/rating.js');
 const rankRoutes = require('./routes/rank.js');
 const voteRoutes = require('./routes/vote.js');
@@ -26,6 +29,7 @@ const notificationRoutes = require('./routes/notification.js');
 const directiveRoutes = require('./routes/directive.js');
 const defenseReportRoutes = require('./routes/defenseReport.js');
 const boardRoutes = require('./routes/board.js');
+const readerRoutes = require('./routes/reader.js');
 
 const { protect } = require('./middleware/auth.js');
 
@@ -39,6 +43,11 @@ app.use(
   '/uploads',
   express.static(path.join(process.cwd(), 'src/uploads'))
 );
+// Catalogue imports live in the FE public folder. Serving them through the API
+// host keeps the same MongoDB imageUrl working on Chrome and Android emulator.
+const mangaAssetRoot = process.env.MANGA_ASSET_ROOT
+  || path.resolve(__dirname, '../../wdp301-fe/public/manga');
+app.use('/manga', express.static(mangaAssetRoot));
 // ===== SWAGGER API DOCS =====
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
@@ -56,6 +65,12 @@ const setupApp = (io) => {
   app.use('/api/series', protect, seriesRoutes);
   app.use('/api/tasks', protect, taskRoutes);
   app.use('/api/chapters', protect, chapterRoutes);
+  app.use('/api/volumes', protect, volumeRoutes);
+  app.use('/api/feedback', protect, feedbackRoutes);
+  app.use('/api/assignments', protect, assignmentRoutes);
+  // Public catalogue endpoints only expose featured series and published
+  // chapters/pages; production manuscripts remain behind authenticated APIs.
+  app.use('/api/reader', readerRoutes);
   app.use('/api/ratings', protect, ratingRoutes);
   app.use('/api/ranks', protect, rankRoutes);
   app.use('/api/votes', protect, voteRoutes);
@@ -101,7 +116,6 @@ const setupApp = (io) => {
           : 'Unsupported or invalid upload',
       });
     }
-
 
     res.status(500).json({
       success: false,

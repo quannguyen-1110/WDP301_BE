@@ -101,6 +101,11 @@ const seriesSubmissionSchema = new mongoose.Schema(
       enum: ['WEEKLY', 'MONTHLY', null],
       default: null,
     },
+    // Deadline by which all assigned voters must cast their votes.
+    votingDeadline: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );

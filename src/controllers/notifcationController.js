@@ -9,12 +9,15 @@ const canAccessUser = (req, userId) => (
 
 exports.createNotification = async (req, res) => {
   try {
-    const { userId, title, content, type } = req.body;
+    const { userId, title, content, type, targetType, targetId, link } = req.body;
     const notification = new Notification({
       userId,
       title,
       content,
       type: type || 'INFO',
+      targetType: targetType || null,
+      targetId: targetId || null,
+      link: link || "",
     });
     await notification.save();
     res.status(201).json({ success: true, data: notification });

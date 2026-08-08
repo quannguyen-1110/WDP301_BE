@@ -24,6 +24,12 @@ const voteSchema = new mongoose.Schema(
       enum: VOTE_DECISION,
       required: true,
     },
+    // Preferred publication schedule when ACCEPT/PUBLISH is chosen
+    schedule: {
+      type: String,
+      enum: ['WEEKLY', 'MONTHLY', null],
+      default: null,
+    },
     comment: String,
   },
   { timestamps: true },

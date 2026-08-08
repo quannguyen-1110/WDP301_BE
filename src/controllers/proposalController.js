@@ -5,6 +5,7 @@ const Notification = require("../models/Notification");
 const { logAction } = require("../utils/auditLogger");
 const { cloudinary } = require("../config/cloudinary");
 const axios = require("axios");
+const { deadlineFromNow } = require("../utils/votingDeadline");
 
 // @desc    Submit proposal + storyboard image uploads (Cloudinary, multiple)
 // @route   POST /api/series/proposal
@@ -86,9 +87,13 @@ exports.getProposals = async (req, res) => {
       filter.mangakaId = mangakaId;
     }
 
-    const proposals = await SeriesProposal.find(filter)
-      .populate("mangakaId", "name email")
-      .sort({ submittedAt: -1 });
+    // Blind review: board members never see the mangaka identity
+    const shouldHideAuthor = req.user.role === 'BOARD_MEMBER';
+    let query = SeriesProposal.find(filter).sort({ submittedAt: -1 });
+    if (!shouldHideAuthor) {
+      query = query.populate('mangakaId', 'name email');
+    }
+    const proposals = await query;
 
     res.status(200).json({
       success: true,
@@ -108,10 +113,13 @@ exports.getProposals = async (req, res) => {
 // @access  EDITOR only
 exports.getProposalById = async (req, res) => {
   try {
-    const proposal = await SeriesProposal.findById(req.params.id).populate(
-      "mangakaId",
-      "name email",
-    );
+    // Blind review: board members never see the mangaka identity
+    const shouldHideAuthor = req.user.role === 'BOARD_MEMBER';
+    let query = SeriesProposal.findById(req.params.id);
+    if (!shouldHideAuthor) {
+      query = query.populate('mangakaId', 'name email');
+    }
+    const proposal = await query;
 
     if (!proposal) {
       return res.status(404).json({
@@ -252,12 +260,15 @@ exports.requestRevision = async (req, res) => {
 
     await proposal.save();
 
-    // Create Notification for the Mangaka
+    // Create Notification for the Mangaka (with deep-link redirect)
     const notification = await Notification.create({
       userId: proposal.mangakaId,
       title: "Revision Requested for Proposal",
       content: `Editor has requested revision for your proposal "${proposal.title}". Reason: ${content || "Revision requested"}`,
       type: "WARNING",
+      link: `/editor/proposals/${proposal._id}`,
+      targetType: "PROPOSAL",
+      targetId: proposal._id,
     });
 
     if (req.io) {
@@ -309,6 +320,9 @@ exports.forwardProposal = async (req, res) => {
     // Update status to SENT_TO_EDITORIAL_BOARD so it is visible to the Editorial Board
     proposal.status = "SENT_TO_EDITORIAL_BOARD";
 
+    // Blind review: hide the author identity from the Editorial Board
+    proposal.isAnonymous = true;
+
     let commentData = null;
     if (content) {
       commentData = {
@@ -333,10 +347,25 @@ exports.forwardProposal = async (req, res) => {
           submissionType: "PITCH",
           decisionStatus: "PENDING",
           requiredVoters: [],
+          votingDeadline: deadlineFromNow(),
         },
       },
       { new: true, upsert: true, runValidators: true },
     );
+
+    // Notify the Mangaka that the proposal was forwarded to the Board
+    const forwardNotification = await Notification.create({
+      userId: proposal.mangakaId,
+      title: "Proposal Forwarded to Editorial Board",
+      content: `Your proposal "${proposal.title}" has been approved by the editor and forwarded to the Editorial Board for anonymous review. Your name is now hidden from the board during the voting process.`,
+      type: "INFO",
+      link: `/editor/proposals/${proposal._id}`,
+      targetType: "PROPOSAL",
+      targetId: proposal._id,
+    });
+    if (req.io) {
+      req.io.to(proposal.mangakaId.toString()).emit("notification", forwardNotification);
+    }
 
     await logAction(
       req.user._id,
@@ -397,12 +426,15 @@ exports.rejectProposal = async (req, res) => {
 
     await proposal.save();
 
-    // Create Notification for the Mangaka
+    // Create Notification for the Mangaka (with deep-link redirect)
     const notification = await Notification.create({
       userId: proposal.mangakaId,
       title: "Proposal Rejected",
       content: `Your proposal "${proposal.title}" has been rejected by the Editor.`,
       type: "WARNING",
+      link: `/editor/proposals/${proposal._id}`,
+      targetType: "PROPOSAL",
+      targetId: proposal._id,
     });
 
     if (req.io) {
@@ -587,6 +619,9 @@ exports.approveProposal = async (req, res) => {
       title: "Proposal Approved by Board",
       content: `Congratulations! Your proposal "${proposal.title}" has been approved by the Editorial Board.`,
       type: "INFO",
+      link: `/editor/proposals/${proposal._id}`,
+      targetType: "PROPOSAL",
+      targetId: proposal._id,
     });
 
     if (req.io) {
