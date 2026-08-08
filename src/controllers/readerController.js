@@ -45,11 +45,12 @@ exports.getCatalogue = async (req, res) => {
       .select(seriesFields)
       .sort({ isCatalogFeatured: -1, title: 1 })
       .lean();
-    const seriesIds = series.map((item) => item._id);
+const seriesIds = series.map((item) => item._id);
     const chapters = await Chapter.find({
       seriesId: { $in: seriesIds }, ...readableChapterFilter,
     })
-      .select('seriesId chapterNumber status publishedAt')
+      .select('seriesId chapterNumber title status publishedAt volumeId')
+      .populate('volumeId', 'volumeNumber title')
       .sort({ chapterNumber: 1 })
       .lean();
     const pageCounts = await pageCountsForChapters(
@@ -82,7 +83,8 @@ exports.getSeries = async (req, res) => {
     const chapters = await Chapter.find({
       seriesId: series._id, ...readableChapterFilter,
     })
-      .select('seriesId chapterNumber title status publishedAt createdAt')
+      .select('seriesId chapterNumber title status publishedAt createdAt volumeId')
+      .populate('volumeId', 'volumeNumber title')
       .sort({ chapterNumber: 1 })
       .lean();
     const pageCounts = await pageCountsForChapters(

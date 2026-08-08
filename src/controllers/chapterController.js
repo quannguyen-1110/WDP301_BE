@@ -371,78 +371,80 @@ exports.updateChapter = async (req, res) => {
   }
 };
 
-// Submit a manga page for the assigned editor to review.
+// @desc    Mangaka submits a page image directly to the editor (no task needed)
+// @route   POST /api/chapters/:id/submit-page
+// @access  MANGAKA, ADMIN
 exports.submitPageToEditor = async (req, res) => {
   try {
-    const { imageUrl, note } = req.body || {};
-    if (!imageUrl?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'A page image is required',
-      });
-    }
-
     const chapter = await Chapter.findById(req.params.id);
     if (!chapter) {
-      return res.status(404).json({ success: false, message: 'Chapter not found' });
+      return res.status(404).json({ success: false, message: "Chapter not found" });
     }
     if (!(await canManageSeries(req.user, chapter.seriesId))) {
       return res.status(403).json({
         success: false,
-        message: 'You can only submit pages for a series you manage',
+        message: "You can only submit pages for a series you manage",
       });
     }
 
-    const latestPage = await Page.findOne({ chapterId: chapter._id })
-      .sort({ pageNumber: -1 })
-      .select('pageNumber');
+    const { imageUrl, note } = req.body;
+    if (!imageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "imageUrl is required — upload the page image first",
+      });
+    }
+
+    const latestPage = await Page.findOne({ chapterId: chapter._id }).sort({ pageNumber: -1 });
     const page = await Page.create({
       chapterId: chapter._id,
       pageNumber: (latestPage?.pageNumber || 0) + 1,
-      imageUrl: normalizeUrl(imageUrl.trim(), req),
-      note: note?.trim() || '',
-      status: 'DRAFT',
+      imageUrl,
+      status: "COMPLETED",
+      note: note || "",
     });
 
-    chapter.status = 'SUBMITTED';
+    const annotations = [];
+
+    if (chapter.status === "IN_PROGRESS" || chapter.status === "COMPLETED") {
+      chapter.status = "SUBMITTED";
+    }
     chapter.totalPages = await Page.countDocuments({ chapterId: chapter._id });
     await chapter.save();
 
-    const series = await Series.findById(chapter.seriesId).select('title editorId');
+    // Notify the assigned editor.
+    const series = await Series.findById(chapter.seriesId).select("title editorId mangakaId");
     if (series?.editorId) {
       const notification = await Notification.create({
         userId: series.editorId,
-        title: 'Chapter Page Submitted',
-        content: `A new page was submitted for Chapter ${chapter.chapterNumber} of "${series.title}".`,
-        type: 'INFO',
-        targetType: 'CHAPTER',
-        targetId: chapter._id,
+        title: "Chapter Submitted for Review",
+        content: `${series.title} — Chapter ${chapter.chapterNumber} was submitted by the Mangaka.`,
+        type: "INFO",
         link: `/editor/review/${chapter.seriesId}`,
+        targetType: "CHAPTER",
+        targetId: chapter._id,
       });
       if (req.io) {
-        req.io.to(series.editorId.toString()).emit('notification', notification);
+        req.io.to(series.editorId.toString()).emit("notification", notification);
       }
     }
 
+    // ==================== AUDIT LOG ====================
     await logAction(
       req.user._id,
-      req.user.name || 'Unknown',
-      'Submitted Chapter Page',
-      `Chapter ${chapter.chapterNumber}`,
-      `Page ${page.pageNumber}`,
+      req.user.name || "Unknown",
+      "Submitted Page to Editor",
+      `Page ${page.pageNumber} - Chapter ${chapter.chapterNumber}`,
+      `Chapter ID: ${chapter._id}`
     );
 
-    if (req.io) {
-      req.io.emit('chapter_updated', chapter);
-    }
-
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
-      message: 'Page submitted to editor successfully',
-      data: { page, chapter },
+      message: "Page submitted to the editor for review",
+      data: { page, annotations, chapter },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

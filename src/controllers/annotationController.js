@@ -127,6 +127,42 @@ exports.getAnnotationsByPage = async (req, res) => {
   }
 };
 
+// @desc    Toggle resolve state of an annotation
+// @route   PUT /api/annotations/:id/resolve
+exports.resolveAnnotation = async (req, res) => {
+  try {
+    const annotation = await Annotation.findById(req.params.id);
+    if (!annotation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Annotation not found',
+      });
+    }
+
+    const ownsAnnotation = annotation.annotatorId.toString() === req.user._id.toString();
+    if (!ownsAnnotation && !(await canManagePage(req.user, annotation.pageId))) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to resolve this annotation',
+      });
+    }
+
+    annotation.resolved = !annotation.resolved;
+    await annotation.save();
+    await annotation.populate('annotatorId', 'name email role');
+
+    res.status(200).json({
+      success: true,
+      data: annotation,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // @desc    Update an annotation
 exports.updateAnnotation = async (req, res) => {
   try {

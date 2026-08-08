@@ -46,6 +46,11 @@ router.post(
 );
 
 /**
+ * Submit a page to the editor (no task required)
+ */
+router.post('/:id/submit-page', authorize('ADMIN', 'MANGAKA'), submitPageToEditor);
+
+/**
  * Delete chapter
  */
 router.delete('/:id', authorize('ADMIN', 'MANGAKA'), deleteChapter);
