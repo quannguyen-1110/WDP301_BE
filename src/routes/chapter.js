@@ -10,7 +10,6 @@ const {
   publishChapter,
   submitPageToEditor,
   getChapterById,
-  submitPageToEditor,
 } = require('../controllers/chapterController.js');
 
 const {
