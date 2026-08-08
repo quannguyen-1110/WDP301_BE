@@ -7,7 +7,6 @@ const {
   getAnnotationsByPage,
   resolveAnnotation,
   updateAnnotation,
-  resolveAnnotation,
   deleteAnnotation,
 } = require('../controllers/annotationController.js');
 
